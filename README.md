@@ -3,9 +3,10 @@
 Deterministic synthetic P2P traffic generator for a fraud controls platform.
 
 Stage 1 includes the package skeleton, customer population model, archetype-based
-baseline simulator, CSV output, and tests for deterministic output. Fraud
-scenario injectors, YAML runs, Kafka, Parquet, and full documentation are
-planned for later stages.
+baseline simulator, CSV output, and tests for deterministic output. Stage 2 adds
+a scenario interface plus deterministic injectors for `new_account_cashout` and
+`card_testing`. YAML runs, Kafka, Parquet, and full documentation are planned for
+later stages.
 
 ## Quick Start
 
