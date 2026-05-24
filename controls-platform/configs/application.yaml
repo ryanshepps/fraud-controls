@@ -1,0 +1,18 @@
+service:
+  name: controls-platform
+  environment: local
+
+kafka:
+  bootstrapServers: localhost:19092
+  inputTopic: fraudgen.events
+  decisionsTopic: controls.decisions
+
+dynamodb:
+  endpoint: http://localhost:18000
+  decisionsTable: controls_decisions
+
+redis:
+  endpoint: redis://localhost:6379
+
+observability:
+  prometheusPort: 9090
