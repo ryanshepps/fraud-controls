@@ -16,19 +16,24 @@ data class TransactionEvent(
     val senderBalanceAfter: BigDecimal,
     val recipientBalanceBefore: BigDecimal,
     val recipientBalanceAfter: BigDecimal,
-    val senderAccountAgeDays: Int,
-    val recipientAccountAgeDays: Int,
+    val senderAccountAgeDays: Double,
+    val recipientAccountAgeDays: Double,
     val isNewCounterparty: Boolean,
 ) {
     init {
         require(amount.isPositive()) { "transaction amount must be positive" }
         require(senderId != recipientId) { "sender and recipient must differ" }
-        require(senderAccountAgeDays >= 0) { "sender account age cannot be negative" }
-        require(recipientAccountAgeDays >= 0) { "recipient account age cannot be negative" }
+        require(senderAccountAgeDays.isFinite() && senderAccountAgeDays >= 0) {
+            "sender account age must be a finite non-negative number"
+        }
+        require(recipientAccountAgeDays.isFinite() && recipientAccountAgeDays >= 0) {
+            "recipient account age must be a finite non-negative number"
+        }
     }
 }
 
 enum class TransactionType {
+    P2P_SEND,
     P2P_PAYMENT,
     CASH_OUT,
     CARD_PAYMENT,
