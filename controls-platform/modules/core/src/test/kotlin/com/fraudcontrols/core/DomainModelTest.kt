@@ -50,9 +50,26 @@ class DomainModelTest {
     }
 
     @Test
+    fun `unavailable feature values require an explicit reason`() {
+        assertFailsWith<IllegalArgumentException> {
+            FeatureValue.Unavailable("")
+        }
+    }
+
+    @Test
     fun `missing feature values require an explicit reason`() {
         assertFailsWith<IllegalArgumentException> {
             FeatureValue.Missing("")
+        }
+    }
+
+    @Test
+    fun `numeric feature values must be finite`() {
+        assertFailsWith<IllegalArgumentException> {
+            FeatureValue.NumberValue(Double.NaN)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            FeatureValue.NumberValue(Double.NEGATIVE_INFINITY)
         }
     }
 
