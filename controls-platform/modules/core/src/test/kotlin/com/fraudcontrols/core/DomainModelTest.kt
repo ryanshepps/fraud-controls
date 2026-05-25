@@ -56,6 +56,16 @@ class DomainModelTest {
         }
     }
 
+    @Test
+    fun `numeric feature values must be finite`() {
+        assertFailsWith<IllegalArgumentException> {
+            FeatureValue.NumberValue(Double.NaN)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            FeatureValue.NumberValue(Double.NEGATIVE_INFINITY)
+        }
+    }
+
     private fun sampleEvent(
         amount: Money = Money.usd("25.00"),
         senderAccountAgeDays: Double = 15.125,

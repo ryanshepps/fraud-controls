@@ -1,7 +1,11 @@
 package com.fraudcontrols.core
 
 sealed interface FeatureValue {
-    data class NumberValue(val value: Double) : FeatureValue
+    data class NumberValue(val value: Double) : FeatureValue {
+        init {
+            require(value.isFinite()) { "numeric feature value must be finite" }
+        }
+    }
     data class BooleanValue(val value: Boolean) : FeatureValue
     data class TextValue(val value: String) : FeatureValue
     data class SetValue(val values: Set<String>) : FeatureValue
