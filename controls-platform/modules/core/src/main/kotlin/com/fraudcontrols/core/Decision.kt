@@ -53,5 +53,6 @@ data class ScoreFactor(
 ) {
     init {
         require(name.isNotBlank()) { "score factor name must not be blank" }
+        require(contribution.isFinite()) { "score factor contribution must be finite" }
     }
 }

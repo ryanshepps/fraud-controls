@@ -50,6 +50,13 @@ class DomainModelTest {
     }
 
     @Test
+    fun `score factors require finite contributions`() {
+        assertFailsWith<IllegalArgumentException> {
+            ScoreFactor("amount", Double.NaN)
+        }
+    }
+
+    @Test
     fun `missing feature values require an explicit reason`() {
         assertFailsWith<IllegalArgumentException> {
             FeatureValue.Missing("")
