@@ -11,12 +11,29 @@ import com.fraudcontrols.features.FraudFeatureExtractor
 import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleEvaluator
+import com.fraudcontrols.scoring.BaselineRiskScorer
 import java.time.Instant
 
 class DecisionEngine(
     private val featureExtractor: FraudFeatureExtractor = FraudFeatureExtractor(),
+    private val riskScorer: BaselineRiskScorer = BaselineRiskScorer(),
     private val ruleEvaluator: RuleEvaluator = RuleEvaluator(),
 ) {
+    fun decide(
+        event: TransactionEvent,
+        rules: List<RuleDefinition>,
+        decidedAt: Instant,
+    ): DecisioningResult {
+        val features = featureExtractor.extract(event)
+        return decide(
+            event = event,
+            rules = rules,
+            score = riskScorer.score(features),
+            features = features,
+            decidedAt = decidedAt,
+        )
+    }
+
     fun decide(
         event: TransactionEvent,
         rules: List<RuleDefinition>,
@@ -24,6 +41,22 @@ class DecisionEngine(
         decidedAt: Instant,
     ): DecisioningResult {
         val features = featureExtractor.extract(event)
+        return decide(
+            event = event,
+            rules = rules,
+            score = score,
+            features = features,
+            decidedAt = decidedAt,
+        )
+    }
+
+    private fun decide(
+        event: TransactionEvent,
+        rules: List<RuleDefinition>,
+        score: ScoreResult,
+        features: FeatureSnapshot,
+        decidedAt: Instant,
+    ): DecisioningResult {
         val ruleEvaluation = ruleEvaluator.evaluate(features, rules)
         val matchedRules = ruleEvaluation.matches
         val action = matchedRules.maxByOrNull { it.action.severity() }?.action ?: score.band.fallbackAction()

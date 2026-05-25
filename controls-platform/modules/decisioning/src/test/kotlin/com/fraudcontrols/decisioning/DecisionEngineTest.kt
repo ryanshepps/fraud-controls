@@ -93,6 +93,20 @@ class DecisionEngineTest {
         assertTrue(result.ruleEvaluation.skipped.single().reason.contains("missing text feature"))
     }
 
+    @Test
+    fun `scores transaction before applying score-band fallback`() {
+        val result = engine.decide(
+            event = sampleEvent(amount = "6000.00"),
+            rules = emptyList(),
+            decidedAt = decidedAt,
+        )
+
+        assertEquals(DecisionAction.HOLD, result.decision.action)
+        assertEquals(RiskBand.HIGH, result.decision.score.band)
+        assertEquals(listOf(ReasonCode("score_high")), result.decision.reasonCodes)
+        assertTrue(result.decision.score.factors.isNotEmpty())
+    }
+
     private fun sampleEvent(amount: String): TransactionEvent =
         TransactionEvent(
             eventId = EventId("evt-1"),
