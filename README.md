@@ -6,8 +6,10 @@ Stage 1 includes the package skeleton, customer population model, archetype-base
 baseline simulator, CSV output, and tests for deterministic output. Stage 2 adds
 a scenario interface plus deterministic injectors for `new_account_cashout` and
 `card_testing`. Stage 3 adds YAML-configured runs that produce separate event and
-fraud-label CSV files. Kafka, Parquet, and full documentation are planned for later
-stages.
+fraud-label CSV files. The controls platform now supports fraudgen event parsing,
+deterministic transaction feature extraction, baseline risk scoring, typed rule
+evaluation, scored decision orchestration, and pure payload-to-decision
+processing. Kafka, Parquet, and full documentation are planned for later stages.
 
 ## Quick Start
 
