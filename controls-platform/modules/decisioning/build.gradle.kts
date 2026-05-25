@@ -3,4 +3,6 @@ dependencies {
     implementation(project(":modules:features"))
     implementation(project(":modules:scoring"))
     implementation(project(":modules:rules"))
+
+    testImplementation(kotlin("test"))
 }
