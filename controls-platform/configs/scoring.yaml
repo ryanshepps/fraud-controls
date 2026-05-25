@@ -8,7 +8,8 @@ scoring:
     - name: primary_scorer
       type: failover
       primary: shadow_wrapped_xgb
-      fallback: heuristic_v3
+      # Use the heuristic scorer only when the model service is down, timing out, or returning errors.
+      fallback: heuristic
       timeout_ms: 30
 
     - name: shadow_wrapped_xgb
@@ -26,6 +27,6 @@ scoring:
       sidecar_address: "scoring-sidecar:50051"
       model_id: "fraud_xgb_v2"
 
-    - name: heuristic_v3
+    - name: heuristic
       type: rule_based
-      config_path: configs/heuristic_v3.yaml
+      config_path: configs/heuristic.yaml

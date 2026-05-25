@@ -32,8 +32,8 @@ class ScorerContractTest {
     @Test
     fun `rule based scorer emits calibrated probability with factors`() = runTest {
         val scorer = RuleBasedScorer(
-            name = "heuristic_v3",
-            version = "heuristic_v3",
+            name = "heuristic",
+            version = "heuristic",
             featureResolver = FeatureResolver(defaultEventFeatureProviders()),
             config = RuleBasedScorerConfig(
                 intercept = -2.0,
@@ -46,8 +46,8 @@ class ScorerContractTest {
 
         val result = scorer.score(ScoringContext(sampleEvent()))
 
-        assertEquals("heuristic_v3", scorer.name)
-        assertEquals("heuristic_v3", result.modelVersion)
+        assertEquals("heuristic", scorer.name)
+        assertEquals("heuristic", result.modelVersion)
         assertEquals(0.383433, result.score.roundTo(6))
         assertEquals(-0.475, result.rawScore?.roundTo(6))
         assertEquals(
@@ -195,7 +195,7 @@ class ScoringConfigTest {
                     - name: primary_scorer
                       type: failover
                       primary: shadow_wrapped_xgb
-                      fallback: heuristic_v3
+                      fallback: heuristic
                       timeout_ms: 30
                     - name: shadow_wrapped_xgb
                       type: shadow
@@ -209,16 +209,16 @@ class ScoringConfigTest {
                       type: xgboost
                       sidecar_address: scoring-sidecar:50051
                       model_id: fraud_xgb_v2
-                    - name: heuristic_v3
+                    - name: heuristic
                       type: rule_based
-                      config_path: configs/heuristic_v3.yaml
+                      config_path: configs/heuristic.yaml
                 """.trimIndent(),
             ),
         )
         val factory = ScorerFactory(
             featureResolver = FeatureResolver(defaultEventFeatureProviders()),
             ruleBasedConfigsByPath = mapOf(
-                "configs/heuristic_v3.yaml" to RuleBasedScorerConfig(
+                "configs/heuristic.yaml" to RuleBasedScorerConfig(
                     intercept = 0.0,
                     weights = listOf(FeatureWeight(FraudFeatureNames.AMOUNT, 0.001)),
                 ),
@@ -229,7 +229,7 @@ class ScoringConfigTest {
         val scorers = factory.build(config)
         val result = scorers.getValue("primary_scorer").score(ScoringContext(sampleEvent()))
 
-        assertEquals(setOf("primary_scorer", "shadow_wrapped_xgb", "xgboost_v1", "xgboost_v2_candidate", "heuristic_v3"), scorers.keys)
+        assertEquals(setOf("primary_scorer", "shadow_wrapped_xgb", "xgboost_v1", "xgboost_v2_candidate", "heuristic"), scorers.keys)
         assertEquals("fraud_xgb_v1", result.modelVersion)
         assertEquals(false, result.degraded)
     }
