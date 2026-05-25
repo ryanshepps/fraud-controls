@@ -49,13 +49,6 @@ class EventFeatureProvider(
     }
 }
 
-class StaticFeatureProvider(
-    override val featureName: String,
-    private val value: FeatureValue,
-) : FeatureProvider {
-    override suspend fun compute(context: ScoringContext): FeatureValue = value
-}
-
 fun defaultEventFeatureProviders(): List<FeatureProvider> =
     listOf(
         FraudFeatureNames.AMOUNT,
