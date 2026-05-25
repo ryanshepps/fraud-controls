@@ -1,4 +1,0 @@
-pythonSidecar:
-  endpoint: http://localhost:8090
-  timeoutMs: 150
-  defaultOnError: 0.50

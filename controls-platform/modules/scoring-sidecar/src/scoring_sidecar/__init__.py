@@ -1,1 +1,0 @@
-"""Scoring sidecar package placeholder."""

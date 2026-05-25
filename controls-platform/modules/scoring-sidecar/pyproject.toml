@@ -1,6 +1,0 @@
-[project]
-name = "controls-scoring-sidecar"
-version = "0.1.0"
-description = "Python scoring sidecar placeholder for the fraud controls platform"
-requires-python = ">=3.11"
-dependencies = []
