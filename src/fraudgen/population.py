@@ -87,8 +87,13 @@ class Population:
             raise ValueError("population_size must be at least 2")
 
         start = start_time or default_start_time()
-        customers = [_create_customer(rng, start) for _ in range(size)]
+        customers = [create_customer(rng, start) for _ in range(size)]
         return cls(customers)
+
+    def add_customer(self, customer: Customer) -> None:
+        self.customers.append(customer)
+        self.by_id[customer.customer_id] = customer
+        self._sender_cdf_cache.clear()
 
     def sender_cdf_at(self, timestamp: datetime) -> np.ndarray:
         is_weekend = timestamp.weekday() >= 5
@@ -131,20 +136,31 @@ class Population:
                 return candidate
 
 
-def _create_customer(rng: Generator, start_time: datetime) -> Customer:
-    archetype = _weighted_choice(rng, ARCHETYPE_WEIGHTS)
-    country = _weighted_choice(rng, COUNTRY_WEIGHTS)
+def create_customer(
+    rng: Generator,
+    start_time: datetime,
+    *,
+    archetype: Archetype | None = None,
+    created_at: datetime | None = None,
+    balance: float | None = None,
+    country: str | None = None,
+) -> Customer:
+    archetype = archetype or _weighted_choice(rng, ARCHETYPE_WEIGHTS)
+    country = country or _weighted_choice(rng, COUNTRY_WEIGHTS)
     params = behavior_for_archetype(archetype)
-    age_days = float(
-        rng.uniform(0.1, 30.0) if archetype is Archetype.NEW_USER else rng.uniform(31.0, 1460.0)
-    )
-    created_at = start_time - timedelta(days=age_days)
+    if created_at is None:
+        age_days = float(
+            rng.uniform(0.1, 30.0) if archetype is Archetype.NEW_USER else rng.uniform(31.0, 1460.0)
+        )
+        created_at = start_time - timedelta(days=age_days)
     center = COUNTRY_CENTERS[country]
     geo = GeoPoint(
         lat=float(center.lat + rng.normal(0.0, 2.5)),
         lng=float(center.lng + rng.normal(0.0, 2.5)),
     )
-    balance = float(max(25.0, rng.lognormal(mean=6.0, sigma=1.0)))
+    starting_balance = balance
+    if starting_balance is None:
+        starting_balance = float(max(25.0, rng.lognormal(mean=6.0, sigma=1.0)))
     customer_id = deterministic_uuid(rng)
     fingerprint_seed = f"{customer_id}:{country}".encode()
     device_fingerprint = hashlib.sha256(fingerprint_seed).hexdigest()[:32]
@@ -155,6 +171,6 @@ def _create_customer(rng: Generator, start_time: datetime) -> Customer:
         archetype=archetype,
         device_fingerprint=device_fingerprint,
         home_geo=geo,
-        balance=round(balance, 2),
+        balance=round(starting_balance, 2),
         behavior_params=params,
     )

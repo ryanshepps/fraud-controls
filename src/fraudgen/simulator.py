@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import numpy as np
 from numpy.random import Generator
@@ -39,6 +40,50 @@ MONEY_COLUMNS = {
     "recipient_balance_before",
     "recipient_balance_after",
 }
+
+
+def create_transaction_event(
+    *,
+    event_id: UUID,
+    timestamp: datetime,
+    sender: Customer,
+    recipient: Customer,
+    amount: float,
+    event_type: str = "p2p_send",
+) -> TransactionEvent:
+    if sender.customer_id == recipient.customer_id:
+        raise ValueError("sender and recipient must be different customers")
+    amount = round(amount, 2)
+    if amount <= 0:
+        raise ValueError("amount must be positive")
+    if sender.balance < amount:
+        raise ValueError("sender balance must cover amount")
+
+    sender_balance_before = sender.balance
+    recipient_balance_before = recipient.balance
+    sender.balance = round(sender.balance - amount, 2)
+    recipient.balance = round(recipient.balance + amount, 2)
+    is_new_counterparty = recipient.customer_id not in sender.recent_counterparties
+    sender.recent_counterparties.append(recipient.customer_id)
+
+    return TransactionEvent(
+        event_id=event_id,
+        timestamp=timestamp,
+        sender_id=sender.customer_id,
+        recipient_id=recipient.customer_id,
+        amount=amount,
+        currency="USD",
+        type=event_type,
+        sender_device_fingerprint=sender.device_fingerprint,
+        sender_geo=sender.home_geo,
+        sender_balance_before=sender_balance_before,
+        sender_balance_after=sender.balance,
+        recipient_balance_before=recipient_balance_before,
+        recipient_balance_after=recipient.balance,
+        sender_account_age_days=(timestamp - sender.created_at).total_seconds() / 86400,
+        recipient_account_age_days=(timestamp - recipient.created_at).total_seconds() / 86400,
+        is_new_counterparty=is_new_counterparty,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,30 +152,12 @@ class BaselineSimulator:
         if amount <= 0:
             return None
 
-        sender_balance_before = sender.balance
-        recipient_balance_before = recipient.balance
-        sender.balance = round(sender.balance - amount, 2)
-        recipient.balance = round(recipient.balance + amount, 2)
-        is_new_counterparty = recipient.customer_id not in sender.recent_counterparties
-        sender.recent_counterparties.append(recipient.customer_id)
-
-        return TransactionEvent(
+        return create_transaction_event(
             event_id=deterministic_uuid(self.rng),
             timestamp=timestamp,
-            sender_id=sender.customer_id,
-            recipient_id=recipient.customer_id,
+            sender=sender,
+            recipient=recipient,
             amount=amount,
-            currency="USD",
-            type="p2p_send",
-            sender_device_fingerprint=sender.device_fingerprint,
-            sender_geo=sender.home_geo,
-            sender_balance_before=sender_balance_before,
-            sender_balance_after=sender.balance,
-            recipient_balance_before=recipient_balance_before,
-            recipient_balance_after=recipient.balance,
-            sender_account_age_days=(timestamp - sender.created_at).total_seconds() / 86400,
-            recipient_account_age_days=(timestamp - recipient.created_at).total_seconds() / 86400,
-            is_new_counterparty=is_new_counterparty,
         )
 
     def _sample_amount(self, sender: Customer) -> float:
