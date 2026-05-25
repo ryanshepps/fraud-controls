@@ -3,9 +3,10 @@
 Kotlin fraud controls service skeleton for consuming `fraudgen` events and
 turning them into allow, challenge, hold, or deny decisions.
 
-Stage 1 contains the Gradle multi-module layout, pure core domain models, and a
-local dependency stack for Redpanda, DynamoDB Local, Redis, Prometheus, and
-Grafana. The local stack avoids common host-port collisions by exposing
+The current staged platform contains the Gradle multi-module layout, pure core
+domain models, fraudgen event parsing, and deterministic transaction feature
+extraction. The local dependency stack includes Redpanda, DynamoDB Local, Redis,
+Prometheus, and Grafana, and avoids common host-port collisions by exposing
 DynamoDB on `18000` and Grafana on `13000`.
 
 ## Build
