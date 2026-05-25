@@ -1,5 +1,6 @@
 .venv/
 __pycache__/
 .pytest_cache/
-src/*.egg-info/
-out/
+fraudgencli/.venv/
+fraudgencli/src/*.egg-info/
+fraudgencli/out/
