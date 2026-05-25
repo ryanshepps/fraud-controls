@@ -1,4 +1,31 @@
-pythonSidecar:
-  endpoint: http://localhost:8090
-  timeoutMs: 150
-  defaultOnError: 0.50
+scoring:
+  features:
+    - name: fraud_model_score
+      provider: scorer
+      scorer: primary_scorer
+
+  scorers:
+    - name: primary_scorer
+      type: failover
+      primary: shadow_wrapped_xgb
+      fallback: heuristic_v3
+      timeout_ms: 30
+
+    - name: shadow_wrapped_xgb
+      type: shadow
+      primary: xgboost_v1
+      shadows: [xgboost_v2_candidate]
+
+    - name: xgboost_v1
+      type: xgboost
+      sidecar_address: "scoring-sidecar:50051"
+      model_id: "fraud_xgb_v1"
+
+    - name: xgboost_v2_candidate
+      type: xgboost
+      sidecar_address: "scoring-sidecar:50051"
+      model_id: "fraud_xgb_v2"
+
+    - name: heuristic_v3
+      type: rule_based
+      config_path: configs/heuristic_v3.yaml

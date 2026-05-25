@@ -31,27 +31,26 @@ value class ReasonCode(val value: String) {
 
 data class ScoreResult(
     val score: Double,
-    val band: RiskBand,
-    val factors: List<ScoreFactor>,
-    val latencyMs: Long,
+    val rawScore: Double?,
+    val contributingFactors: List<Factor>,
+    val modelVersion: String,
+    val latencyMs: Double,
+    val degraded: Boolean = false,
 ) {
     init {
         require(score in 0.0..1.0) { "score must be in [0.0, 1.0]" }
-        require(latencyMs >= 0) { "latency cannot be negative" }
+        require(rawScore == null || rawScore.isFinite()) { "raw score must be finite when present" }
+        require(modelVersion.isNotBlank()) { "model version must not be blank" }
+        require(latencyMs.isFinite() && latencyMs >= 0.0) { "latency cannot be negative or non-finite" }
     }
 }
 
-enum class RiskBand {
-    LOW,
-    MEDIUM,
-    HIGH,
-}
-
-data class ScoreFactor(
+data class Factor(
     val name: String,
     val contribution: Double,
 ) {
     init {
         require(name.isNotBlank()) { "score factor name must not be blank" }
+        require(contribution.isFinite()) { "score factor contribution must be finite" }
     }
 }

@@ -160,17 +160,15 @@ class StoreBackedFeatureProviderTest {
     }
 
     @Test
-    fun `resolves graph device geo and model score features`() = runSuspending {
-        val event = sampleEvent()
+    fun `resolves graph device and geo features`() = runSuspending {
         val request = FeatureResolver(
             listOf(
                 GraphFeatureProvider(FraudFeatureNames.RECIPIENT_IN_DEGREE_7D, StaticGraphStore),
                 GraphFeatureProvider(FraudFeatureNames.SENDER_RECIPIENT_PRIOR_SEND_COUNT, StaticGraphStore),
                 DeviceGeoFeatureProvider(FraudFeatureNames.DEVICE_DISTINCT_ACCOUNTS_30D, StaticDeviceGeoStore),
                 DeviceGeoFeatureProvider(FraudFeatureNames.IMPOSSIBLE_TRAVEL_FROM_LAST_LOGIN, StaticDeviceGeoStore),
-                FraudModelScoreFeatureProvider { FeatureContextAssertions.assertEvent(it, event) },
             ),
-        ).request(ScoringContext(event))
+        ).request(ScoringContext(sampleEvent()))
 
         assertEquals(FeatureValue.NumberValue(12.0), request.resolve(FraudFeatureNames.RECIPIENT_IN_DEGREE_7D))
         assertEquals(
@@ -185,7 +183,6 @@ class StoreBackedFeatureProviderTest {
             FeatureValue.BooleanValue(true),
             request.resolve(FraudFeatureNames.IMPOSSIBLE_TRAVEL_FROM_LAST_LOGIN),
         )
-        assertEquals(FeatureValue.NumberValue(0.91), request.resolve(FraudFeatureNames.FRAUD_MODEL_SCORE))
     }
 
     @Test
