@@ -5,12 +5,18 @@ import com.fraudcontrols.features.VelocityFeatureStore
 import com.fraudcontrols.features.VelocityMetric
 import com.fraudcontrols.features.VelocityWindow
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 import redis.clients.jedis.JedisPooled
 
 class RedisVelocityFeatureStore(
     private val redis: JedisPooled,
+    private val retention: Duration = Duration.ofHours(25),
 ) : VelocityFeatureStore {
+    init {
+        require(!retention.isNegative && !retention.isZero) { "velocity retention must be positive" }
+    }
+
     override suspend fun senderVelocity(
         senderId: CustomerId,
         metric: VelocityMetric,
@@ -32,8 +38,10 @@ class RedisVelocityFeatureStore(
         occurredAt: Instant,
         amount: BigDecimal,
     ) {
+        val key = senderKey(senderId)
         val member = "${occurredAt.toEpochMilli()}:$eventId:$amount"
-        redis.zadd(senderKey(senderId), occurredAt.toEpochMilli().toDouble(), member)
+        redis.zadd(key, occurredAt.toEpochMilli().toDouble(), member)
+        redis.expire(key, retention.seconds)
     }
 
     fun trimSenderSendsBefore(

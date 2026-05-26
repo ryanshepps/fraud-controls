@@ -104,6 +104,7 @@ class RuntimePipelineIntegrationTest {
                     occurredAt = eventTime.minusSeconds(60),
                     amount = BigDecimal("15.00"),
                 )
+                assertTrue(createdRedisClient.ttl("velocity:sender:sender-1:sends") > 0)
 
                 val createdProducer = kafkaStringProducer(redpanda.bootstrapServers)
                 producer = createdProducer
