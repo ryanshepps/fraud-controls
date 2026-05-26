@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -8,8 +10,9 @@ from pydantic import ValidationError
 
 from fraudgen.cli import main
 from fraudgen.run_config import load_run_config
-from fraudgen.runner import LABEL_CSV_COLUMNS, run_from_config
+from fraudgen.runner import LABEL_CSV_COLUMNS, build_run_artifacts, run_from_config
 from fraudgen.simulator import CSV_COLUMNS
+from fraudgen.streaming import publish_artifacts
 
 
 def test_yaml_run_writes_events_and_labels_csv(tmp_path: Path) -> None:
@@ -53,6 +56,36 @@ def test_cli_run_config_writes_outputs(tmp_path: Path) -> None:
     assert exit_code == 0
     assert (tmp_path / "events.csv").exists()
     assert (tmp_path / "labels.csv").exists()
+
+
+def test_streaming_publishes_rebased_json_events_and_labels(tmp_path: Path) -> None:
+    config_path = _write_config(tmp_path, "events.csv", "labels.csv")
+    artifacts = build_run_artifacts(load_run_config(config_path))
+    producer = RecordingProducer()
+
+    summary = publish_artifacts(
+        artifacts,
+        producer=producer,
+        topic="transactions",
+        label_topic="fraud_labels",
+        cycle=0,
+        base_time=datetime(2026, 5, 26, 19, 0, tzinfo=timezone.utc),
+        delay_ms=0,
+    )
+
+    event_records = [record for record in producer.records if record[0] == "transactions"]
+    label_records = [record for record in producer.records if record[0] == "fraud_labels"]
+    first_payload = json.loads(event_records[0][2])
+    assert summary.events == len(artifacts.events)
+    assert summary.labels == len(artifacts.labels)
+    assert len(event_records) == len(artifacts.events)
+    assert len(label_records) == len(artifacts.labels)
+    assert first_payload["event_id"] == str(artifacts.events[0].event_id)
+    assert first_payload["timestamp"] == "2026-05-26T19:00:00+00:00"
+    assert set(first_payload) == set(CSV_COLUMNS)
+    assert {json.loads(record[2])["event_id"] for record in label_records}.issubset(
+        {json.loads(record[2])["event_id"] for record in event_records}
+    )
 
 
 def test_yaml_run_rejects_unknown_scenario(tmp_path: Path) -> None:
@@ -138,3 +171,17 @@ scenarios:
         encoding="utf-8",
     )
     return config_path
+
+
+class RecordingProducer:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str, str]] = []
+
+    def produce(self, topic: str, *, key: str, value: str) -> None:
+        self.records.append((topic, key, value))
+
+    def poll(self, timeout: float) -> int:
+        return 0
+
+    def flush(self, timeout: float = 30.0) -> int:
+        return 0

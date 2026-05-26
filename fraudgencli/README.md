@@ -6,8 +6,8 @@ Stage 1 includes the package skeleton, customer population model, archetype-base
 baseline simulator, CSV output, and tests for deterministic output. Stage 2 adds
 a scenario interface plus deterministic injectors for `new_account_cashout` and
 `card_testing`. Stage 3 adds YAML-configured runs that produce separate event and
-fraud-label CSV files. Kafka, Parquet, and full documentation are planned for later
-stages.
+fraud-label CSV files. The controls demo can also stream those same YAML runs to
+Kafka as JSON transaction and label events.
 
 ## Quick Start
 
@@ -21,4 +21,10 @@ Run the mixed baseline-plus-scenario generator from YAML:
 
 ```bash
 uv run fraudgen run-config --config examples/stage3-run.yaml
+```
+
+Stream the controls demo mix into Redpanda/Kafka:
+
+```bash
+uv run fraudgen stream-config --config examples/controls-demo-stream.yaml --bootstrap-servers localhost:19092 --topic transactions --label-topic fraud_labels --loop --delay-ms 500
 ```

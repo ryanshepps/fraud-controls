@@ -6,6 +6,7 @@ from pathlib import Path
 from fraudgen.run_config import load_run_config
 from fraudgen.runner import run_from_config
 from fraudgen.simulator import SimulationConfig, run_to_csv
+from fraudgen.streaming import stream_from_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
         "run-config", help="run baseline and fraud scenarios from a YAML config"
     )
     run_config_parser.add_argument("--config", type=Path, required=True)
+
+    stream_config_parser = subparsers.add_parser(
+        "stream-config", help="stream a YAML run config to Kafka as JSON events"
+    )
+    stream_config_parser.add_argument("--config", type=Path, required=True)
+    stream_config_parser.add_argument("--bootstrap-servers", required=True)
+    stream_config_parser.add_argument("--topic", default="transactions")
+    stream_config_parser.add_argument("--label-topic")
+    stream_config_parser.add_argument("--loop", action="store_true")
+    stream_config_parser.add_argument("--delay-ms", type=int, default=250)
 
     return parser
 
@@ -55,6 +66,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"events={run_summary.total_events}")
         print(f"scenario_events={run_summary.scenario_events}")
         print(f"labels={run_summary.total_labels}")
+        return 0
+
+    if args.command == "stream-config":
+        run_config = load_run_config(args.config)
+        stream_summary = stream_from_config(
+            run_config,
+            bootstrap_servers=args.bootstrap_servers,
+            topic=args.topic,
+            label_topic=args.label_topic,
+            loop=args.loop,
+            delay_ms=args.delay_ms,
+            on_event=lambda event_id: print(f"published event_id={event_id}", flush=True),
+        )
+        print(f"cycles={stream_summary.cycles}")
+        print(f"events={stream_summary.events}")
+        print(f"labels={stream_summary.labels}")
         return 0
 
     parser.error(f"unknown command: {args.command}")

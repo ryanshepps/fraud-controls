@@ -1,0 +1,25 @@
+seed: 42
+duration_hours: 0.25
+population_size: 1200
+events_per_hour_target: 1200.0
+tick_seconds: 30
+start_time: "2024-01-01T00:00:00+00:00"
+output:
+  events_csv: out/controls-demo-events.csv
+  labels_csv: out/controls-demo-fraud-labels.csv
+scenarios:
+  - name: new_account_cashout
+    count: 3
+    start_after_seconds: 120
+    spacing_seconds: 180
+    inbound_amount: 850.0
+    minutes_to_cashout: 5
+    cashout_fraction: 0.9
+  - name: card_testing
+    count: 2
+    start_after_seconds: 300
+    spacing_seconds: 240
+    attempt_count: 8
+    window_seconds: 45
+    amount_min: 0.50
+    amount_max: 3.00

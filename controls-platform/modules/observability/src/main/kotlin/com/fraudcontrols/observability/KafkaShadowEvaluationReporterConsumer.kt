@@ -12,7 +12,7 @@ class KafkaShadowEvaluationReporterConsumer(
     private val reporter: ShadowEvaluationReporter,
     private val shadowEvaluationsTopic: String = DEFAULT_SHADOW_EVALUATIONS_TOPIC,
     private val ruleEvaluationsTopic: String = DEFAULT_RULE_EVALUATIONS_TOPIC,
-) {
+) : AutoCloseable {
     fun pollAndReport(timeout: Duration): Int {
         val records = consumer.poll(timeout)
         for (record in records) {
@@ -25,6 +25,10 @@ class KafkaShadowEvaluationReporterConsumer(
             consumer.commitSync()
         }
         return records.count()
+    }
+
+    override fun close() {
+        consumer.close()
     }
 }
 

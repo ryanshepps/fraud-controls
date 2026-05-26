@@ -1,5 +1,6 @@
 package com.fraudcontrols.streaming
 
+import com.fraudcontrols.core.TransactionEvent
 import com.fraudcontrols.decisioning.DecisionProcessor
 import com.fraudcontrols.rules.RuleDefinition
 import java.time.Clock
@@ -16,11 +17,13 @@ class KafkaTransactionDecisionConsumer(
     private val rules: () -> List<RuleDefinition>,
     private val parser: FraudgenEventParser = FraudgenEventParser(),
     private val clock: Clock = Clock.systemUTC(),
+    private val beforeProcess: suspend (TransactionEvent) -> Unit = {},
 ) : AutoCloseable {
     suspend fun pollAndProcess(timeout: Duration): Int {
         val records = consumer.poll(timeout)
         for (record in records) {
             val event = parser.parse(record.value())
+            beforeProcess(event)
             processor.process(event = event, rules = rules(), decidedAt = clock.instant())
         }
         if (!records.isEmpty) {

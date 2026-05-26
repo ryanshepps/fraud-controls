@@ -1,6 +1,9 @@
 [project]
 name = "controls-scoring-sidecar"
 version = "0.1.0"
-description = "Python scoring sidecar placeholder for the fraud controls platform"
+description = "Deterministic demo scoring sidecar for the fraud controls platform"
 requires-python = ">=3.11"
 dependencies = []
+
+[project.scripts]
+controls-demo-scoring-sidecar = "scoring_sidecar.demo_server:main"
