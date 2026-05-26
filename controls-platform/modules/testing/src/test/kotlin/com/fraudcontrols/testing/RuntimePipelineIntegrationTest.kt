@@ -145,19 +145,26 @@ class RuntimePipelineIntegrationTest {
                     }.item().takeIf { it.isNotEmpty() }
                 }
                 assertEquals("HOLD", auditItem["action"]?.s())
+                assertEquals("1", auditItem["schema_version"]?.n())
                 assertEquals("0.1", auditItem["score"]?.n())
                 assertEquals("fixed-v1", auditItem["model_version"]?.s())
                 assertEquals(listOf("velocity_spike"), auditItem["reason_codes"]?.l()?.map { it.s() })
+                val auditRuleEvaluationJson = Json.parseToJsonElement(auditItem["rule_evaluation_json"]?.s().orEmpty()).jsonObject
+                assertEquals("1", auditRuleEvaluationJson["schema_version"]?.jsonPrimitive?.content)
+                assertEquals("velocity-spike", auditRuleEvaluationJson["matches"]?.jsonArray?.single()?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
 
                 val decisionPayload = readKafkaValue(redpanda.bootstrapServers, decisionsTopic, "evt-1")
                 val decisionJson = Json.parseToJsonElement(decisionPayload).jsonObject
+                assertEquals("1", decisionJson["schema_version"]?.jsonPrimitive?.content)
                 assertEquals("evt-1", decisionJson["event_id"]?.jsonPrimitive?.content)
                 assertEquals("HOLD", decisionJson["action"]?.jsonPrimitive?.content)
                 assertEquals("velocity_spike", decisionJson["reason_codes"]?.jsonArray?.single()?.jsonPrimitive?.content)
                 assertEquals("0.1", decisionJson["score"]?.jsonObject?.get("score")?.jsonPrimitive?.content)
 
                 val ruleEvaluationPayload = readKafkaValue(redpanda.bootstrapServers, ruleEvaluationsTopic, "evt-1")
-                assertTrue(ruleEvaluationPayload.contains("velocity-spike"))
+                val ruleEvaluationJson = Json.parseToJsonElement(ruleEvaluationPayload).jsonObject
+                assertEquals("1", ruleEvaluationJson["schema_version"]?.jsonPrimitive?.content)
+                assertEquals("velocity-spike", ruleEvaluationJson["matches"]?.jsonArray?.single()?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
             } finally {
                 transactionConsumer?.close()
                 producer?.close()
