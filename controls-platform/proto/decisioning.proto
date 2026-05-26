@@ -5,14 +5,34 @@ package fraudcontrols.decisioning.v1;
 option java_multiple_files = true;
 option java_package = "com.fraudcontrols.decisioning.v1";
 
-message DecisionRequest {
-  string event_id = 1;
+message EvaluateRequest {
+  string transaction_json = 1;
 }
 
-message DecisionResponse {
+message EvaluateResponse {
   string event_id = 1;
   DecisionAction action = 2;
   repeated string reason_codes = 3;
+  double score = 4;
+  string decided_at = 5;
+}
+
+message GetDecisionRequest {
+  string event_id = 1;
+}
+
+message DecisionRecord {
+  int32 schema_version = 1;
+  string event_id = 2;
+  string decided_at = 3;
+  DecisionAction action = 4;
+  repeated string reason_codes = 5;
+  double score = 6;
+  string model_version = 7;
+  string score_json = 8;
+  repeated string rule_evaluation_ids = 9;
+  string features_json = 10;
+  string rule_evaluation_json = 11;
 }
 
 enum DecisionAction {
@@ -23,6 +43,7 @@ enum DecisionAction {
   DECISION_ACTION_DENY = 4;
 }
 
-service DecisioningService {
-  rpc Decide(DecisionRequest) returns (DecisionResponse);
+service DecisionService {
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc GetDecision(GetDecisionRequest) returns (DecisionRecord);
 }
