@@ -2,6 +2,7 @@ package com.fraudcontrols.observability
 
 import com.fraudcontrols.core.Decision
 import com.fraudcontrols.decisioning.DecisioningMetrics
+import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleEvaluationResult
 
 class DecisioningMetricsAdapter(
@@ -13,6 +14,10 @@ class DecisioningMetricsAdapter(
 
     override fun recordDecisionLatency(latencyMs: Double) {
         metrics.recordDecisionLatency(latencyMs)
+    }
+
+    override fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect) {
+        metrics.recordDecisionSideEffectFailure(sideEffect)
     }
 
     override fun recordFeatureResolutionLatency(latencyMs: Double) {

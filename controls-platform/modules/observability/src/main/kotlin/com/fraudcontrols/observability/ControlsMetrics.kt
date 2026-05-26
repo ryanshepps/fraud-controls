@@ -1,6 +1,7 @@
 package com.fraudcontrols.observability
 
 import com.fraudcontrols.core.DecisionAction
+import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleActionType
 import com.fraudcontrols.rules.RuleMode
 
@@ -8,6 +9,8 @@ interface ControlsMetrics {
     fun recordDecision(action: DecisionAction)
 
     fun recordDecisionLatency(latencyMs: Double)
+
+    fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect)
 
     fun recordFeatureResolutionLatency(latencyMs: Double)
 
@@ -45,6 +48,8 @@ data object NoopControlsMetrics : ControlsMetrics {
     override fun recordDecision(action: DecisionAction) = Unit
 
     override fun recordDecisionLatency(latencyMs: Double) = Unit
+
+    override fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect) = Unit
 
     override fun recordFeatureResolutionLatency(latencyMs: Double) = Unit
 

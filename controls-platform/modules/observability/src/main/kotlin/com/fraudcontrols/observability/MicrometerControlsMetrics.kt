@@ -1,6 +1,7 @@
 package com.fraudcontrols.observability
 
 import com.fraudcontrols.core.DecisionAction
+import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleActionType
 import com.fraudcontrols.rules.RuleMode
 import io.micrometer.core.instrument.Gauge
@@ -24,6 +25,10 @@ class MicrometerControlsMetrics(
 
     override fun recordDecisionLatency(latencyMs: Double) {
         histogramTimer("controls.decision.latency").record(latencyMs.toDuration())
+    }
+
+    override fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect) {
+        registry.counter("controls.decision.side_effect.failures", "side_effect", sideEffect.name).increment()
     }
 
     override fun recordFeatureResolutionLatency(latencyMs: Double) {

@@ -16,6 +16,14 @@ import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleEvaluator
 import java.time.Instant
+import java.util.logging.Level
+import java.util.logging.Logger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class DecisionEngine(
     private val featureResolver: FeatureResolver,
@@ -72,6 +80,8 @@ class DecisionProcessor(
     private val decisionPublisher: DecisionPublisher = NoopDecisionPublisher,
     private val ruleEvaluationPublisher: RuleEvaluationPublisher = NoopRuleEvaluationPublisher,
     private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
+    private val sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val logger: Logger = Logger.getLogger(DecisionProcessor::class.java.name),
 ) {
     suspend fun process(
         event: TransactionEvent,
@@ -79,15 +89,40 @@ class DecisionProcessor(
         decidedAt: Instant,
     ): DecisioningResult {
         val result = timed {
-            val decisioningResult = engine.decide(event = event, rules = rules, decidedAt = decidedAt)
-            auditSink.record(decisioningResult.record)
-            ruleEvaluationPublisher.publish(decisioningResult.ruleEvaluation)
-            decisionPublisher.publish(decisioningResult.decision)
-            decisioningResult
+            engine.decide(event = event, rules = rules, decidedAt = decidedAt)
         }
         metrics.recordDecision(result.value.decision)
         metrics.recordDecisionLatency(result.elapsedMs)
+        scheduleSideEffects(result.value)
         return result.value
+    }
+
+    private fun scheduleSideEffects(result: DecisioningResult) {
+        launchSideEffect(DecisionSideEffect.AUDIT_RECORD) {
+            auditSink.record(result.record)
+        }
+        launchSideEffect(DecisionSideEffect.RULE_EVALUATION_PUBLISH) {
+            ruleEvaluationPublisher.publish(result.ruleEvaluation)
+        }
+        launchSideEffect(DecisionSideEffect.DECISION_PUBLISH) {
+            decisionPublisher.publish(result.decision)
+        }
+    }
+
+    private fun launchSideEffect(
+        sideEffect: DecisionSideEffect,
+        block: suspend () -> Unit,
+    ) {
+        sideEffectScope.launch(start = CoroutineStart.DEFAULT) {
+            try {
+                block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                metrics.recordDecisionSideEffectFailure(sideEffect)
+                logger.log(Level.WARNING, "decision side effect failed: $sideEffect", error)
+            }
+        }
     }
 }
 

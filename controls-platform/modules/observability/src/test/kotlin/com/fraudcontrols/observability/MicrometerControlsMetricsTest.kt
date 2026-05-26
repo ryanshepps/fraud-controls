@@ -1,6 +1,7 @@
 package com.fraudcontrols.observability
 
 import com.fraudcontrols.core.DecisionAction
+import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleActionType
 import com.fraudcontrols.rules.RuleMode
 import kotlin.test.Test
@@ -13,6 +14,7 @@ class MicrometerControlsMetricsTest {
 
         metrics.recordDecision(DecisionAction.DENY)
         metrics.recordDecisionLatency(42.0)
+        metrics.recordDecisionSideEffectFailure(DecisionSideEffect.AUDIT_RECORD)
         metrics.recordFeatureResolutionLatency(3.0)
         metrics.recordRuleEvaluationLatency(4.0)
         metrics.recordScoringLatency("primary", "v1", degraded = false, latencyMs = 5.0)
@@ -34,6 +36,7 @@ class MicrometerControlsMetricsTest {
 
         assertTrue(scrape.contains("controls_decisions_total{action=\"DENY\"} 1.0"))
         assertTrue(scrape.contains("controls_decision_latency_seconds_bucket"))
+        assertTrue(scrape.contains("controls_decision_side_effect_failures_total{side_effect=\"AUDIT_RECORD\"} 1.0"))
         assertTrue(scrape.contains("controls_feature_resolution_latency_seconds_bucket"))
         assertTrue(scrape.contains("controls_rule_evaluation_latency_seconds_bucket"))
         assertTrue(scrape.contains("controls_scoring_latency_seconds_bucket"))
