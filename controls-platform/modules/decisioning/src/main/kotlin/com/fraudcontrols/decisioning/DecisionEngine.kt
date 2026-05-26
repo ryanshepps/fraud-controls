@@ -15,12 +15,10 @@ import com.fraudcontrols.rules.RuleCondition
 import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleEvaluator
-import com.fraudcontrols.scoring.Scorer
 import java.time.Instant
 
 class DecisionEngine(
     private val featureResolver: FeatureResolver,
-    private val scorer: Scorer,
     private val ruleEvaluator: RuleEvaluator = RuleEvaluator(),
 ) {
     suspend fun decide(
@@ -29,12 +27,11 @@ class DecisionEngine(
         decidedAt: Instant,
     ): DecisioningResult {
         val context = ScoringContext(event)
-        val score = scorer.score(context)
         val features = featureResolver.resolveRuleFeatures(
             context = context,
             featureNames = rules.flatMap { it.condition.featureNames() }.toSet(),
-            score = score,
         )
+        val score = features.scoreResult()
         val ruleEvaluation = ruleEvaluator.evaluate(features, rules)
         val resolvedAction = ruleEvaluation.resolvedAction
 
@@ -129,21 +126,25 @@ private fun RuleCondition.featureNames(): Set<String> =
 private suspend fun FeatureResolver.resolveRuleFeatures(
     context: ScoringContext,
     featureNames: Set<String>,
-    score: ScoreResult,
 ): FeatureSnapshot {
     val request = request(context)
     val values = linkedMapOf<String, FeatureValue>()
 
-    for (featureName in featureNames) {
-        values[featureName] = if (featureName == FraudFeatureNames.FRAUD_MODEL_SCORE) {
-            FeatureValue.NumberValue(score.score)
-        } else {
-            request.resolve(featureName)
-        }
+    for (featureName in featureNames + FraudFeatureNames.FRAUD_MODEL_SCORE) {
+        values[featureName] = request.resolve(featureName)
     }
 
     return FeatureSnapshot(eventId = context.eventId, values = values)
 }
+
+private fun FeatureSnapshot.scoreResult(): ScoreResult =
+    when (val value = values[FraudFeatureNames.FRAUD_MODEL_SCORE]) {
+        is FeatureValue.ScoreValue -> value.result
+        is FeatureValue.Missing -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} missing: ${value.reason}")
+        is FeatureValue.Unavailable -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} unavailable: ${value.reason}")
+        null -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} was not resolved")
+        else -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} must be provided by ScorerFeatureProvider")
+    }
 
 private fun ScoreResult.fallbackAction(): DecisionAction =
     when {

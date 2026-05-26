@@ -20,7 +20,7 @@ class ScorerFeatureProvider(
     override val featureName: String = FraudFeatureNames.FRAUD_MODEL_SCORE
 
     override suspend fun compute(context: ScoringContext) =
-        FeatureValue.NumberValue(scorer.score(context).score)
+        FeatureValue.ScoreValue(scorer.score(context))
 }
 
 data class RuleBasedScorerConfig(

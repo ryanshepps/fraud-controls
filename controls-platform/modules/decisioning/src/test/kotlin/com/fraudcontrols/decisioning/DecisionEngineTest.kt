@@ -26,11 +26,13 @@ import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.rules.RuleValue
 import com.fraudcontrols.scoring.Scorer
+import com.fraudcontrols.scoring.ScorerFeatureProvider
 import java.math.BigDecimal
 import java.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -50,6 +52,7 @@ class DecisionEngineTest {
         assertEquals(emptyList(), result.decision.ruleEvaluationIds)
         assertEquals(emptyList(), result.ruleEvaluation.matches)
         assertEquals(EventId("evt-1"), result.features.eventId)
+        assertTrue(result.features.values.containsKey(FraudFeatureNames.FRAUD_MODEL_SCORE))
         assertSame(result.decision, result.record.decision)
         assertSame(result.features, result.record.features)
         assertSame(result.ruleEvaluation, result.record.ruleEvaluation)
@@ -147,6 +150,7 @@ class DecisionEngineTest {
         assertEquals(DecisionAction.CHALLENGE, result.decision.action)
         assertEquals(listOf(ReasonCode("model_score_high")), result.decision.reasonCodes)
         assertEquals(listOf("model-score-high"), result.decision.ruleEvaluationIds)
+        assertEquals(0.8, result.decision.score.score)
     }
 
     @Test
@@ -186,10 +190,25 @@ class DecisionEngineTest {
         assertTrue(auditSink.records.single().features.values.containsKey(FraudFeatureNames.AMOUNT))
     }
 
+    @Test
+    fun `requires fraud model score from scorer feature provider`() = runTest {
+        val engine = DecisionEngine(featureResolver = FeatureResolver(defaultEventFeatureProviders()))
+
+        val error = assertFailsWith<IllegalStateException> {
+            engine.decide(
+                event = sampleEvent(amount = "25.00"),
+                rules = emptyList(),
+                decidedAt = decidedAt,
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("fraud_model_score unavailable"))
+        assertTrue(error.message.orEmpty().contains("no provider registered"))
+    }
+
     private fun engine(score: ScoreResult): DecisionEngine =
         DecisionEngine(
-            featureResolver = FeatureResolver(defaultEventFeatureProviders()),
-            scorer = FixedScorer(score),
+            featureResolver = FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(FixedScorer(score))),
         )
 
     private fun sampleEvent(amount: String): TransactionEvent =

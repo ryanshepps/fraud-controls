@@ -67,7 +67,8 @@ class ScorerContractTest {
             .request(ScoringContext(sampleEvent()))
             .resolve(FraudFeatureNames.FRAUD_MODEL_SCORE)
 
-        assertEquals(FeatureValue.NumberValue(0.82), result)
+        assertEquals(0.82, (result as FeatureValue.ScoreValue).value)
+        assertEquals("v1", result.result.modelVersion)
     }
 
     @Test
