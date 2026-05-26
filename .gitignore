@@ -4,3 +4,4 @@ __pycache__/
 fraudgencli/.venv/
 fraudgencli/src/*.egg-info/
 fraudgencli/out/
+controls-platform/**/build/

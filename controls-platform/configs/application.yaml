@@ -6,6 +6,9 @@ kafka:
   bootstrapServers: localhost:19092
   inputTopic: fraudgen.events
   decisionsTopic: controls.decisions
+  ruleEvaluationsTopic: rule_evaluations
+  shadowEvaluationsTopic: shadow_evaluations
+  ruleChangesTopic: rule_changes
 
 dynamodb:
   endpoint: http://localhost:18000
@@ -16,3 +19,4 @@ redis:
 
 observability:
   prometheusPort: 9090
+  metricsPath: /metrics

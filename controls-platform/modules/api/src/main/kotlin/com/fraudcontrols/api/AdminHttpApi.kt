@@ -21,8 +21,15 @@ fun Application.installControlsAdminRoutes(
     ruleAdminService: RuleAdminService,
     decisionRecords: DecisionRecordReader,
     globalKillSwitchService: GlobalKillSwitchService,
+    metricsScrape: (() -> String)? = null,
 ) {
     routing {
+        if (metricsScrape != null) {
+            get("/metrics") {
+                call.respondText(metricsScrape(), ContentType.Text.Plain)
+            }
+        }
+
         get("/rules") {
             val rules = ruleAdminService.list()
             call.respondJson(
@@ -139,12 +146,14 @@ fun startAdminHttpServer(
     globalKillSwitchService: GlobalKillSwitchService,
     host: String = "127.0.0.1",
     port: Int = 8080,
+    metricsScrape: (() -> String)? = null,
 ) =
     embeddedServer(Netty, host = host, port = port) {
         installControlsAdminRoutes(
             ruleAdminService = ruleAdminService,
             decisionRecords = decisionRecords,
             globalKillSwitchService = globalKillSwitchService,
+            metricsScrape = metricsScrape,
         )
     }.start(wait = false)
 
