@@ -34,6 +34,20 @@ enum class ShadowScorerRole {
     SHADOW,
 }
 
+/**
+ * Runs candidate scorers beside the live scorer without changing the live decision.
+ *
+ * [ShadowScorer] returns the [primary] scorer's [ScoreResult]. The [shadows] run on the same
+ * [ScoringContext], but their results are recorded through [sink] for offline comparison only.
+ *
+ * This is how the scoring module evaluates a new model against production-shaped traffic before it
+ * becomes primary. Shadow output must not affect customer-facing decisions. Runtime failures from a
+ * shadow scorer are recorded as shadow evaluation errors, while primary failures still fail the live
+ * scorer path.
+ *
+ * Cancellation is rethrown so request shutdown and coroutine cancellation are not reported as model
+ * comparison results.
+ */
 class ShadowScorer(
     override val name: String,
     private val primary: Scorer,
