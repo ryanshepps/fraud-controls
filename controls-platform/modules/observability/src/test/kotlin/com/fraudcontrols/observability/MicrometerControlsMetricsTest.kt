@@ -1,0 +1,45 @@
+package com.fraudcontrols.observability
+
+import com.fraudcontrols.core.DecisionAction
+import com.fraudcontrols.rules.RuleActionType
+import com.fraudcontrols.rules.RuleMode
+import kotlin.test.Test
+import kotlin.test.assertTrue
+
+class MicrometerControlsMetricsTest {
+    @Test
+    fun `exports decision latency rule and shadow metrics in prometheus format`() {
+        val metrics = MicrometerControlsMetrics()
+
+        metrics.recordDecision(DecisionAction.DENY)
+        metrics.recordDecisionLatency(42.0)
+        metrics.recordFeatureResolutionLatency(3.0)
+        metrics.recordRuleEvaluationLatency(4.0)
+        metrics.recordScoringLatency("primary", "v1", degraded = false, latencyMs = 5.0)
+        metrics.recordRuleMatch("high-score", RuleMode.SHADOW, RuleActionType.BLOCK)
+        metrics.updateShadowRuleMetrics(
+            ruleId = "high-score",
+            fireRate = 0.25,
+            wouldHaveBlockedRate = 0.5,
+            agreementRate = 0.75,
+        )
+        metrics.updateScorerPairMetrics(
+            primaryScorer = "primary",
+            shadowScorer = "candidate",
+            scoreDivergence = 0.12,
+            decisionFlipRate = 0.2,
+        )
+
+        val scrape = metrics.scrape()
+
+        assertTrue(scrape.contains("controls_decisions_total{action=\"DENY\"} 1.0"))
+        assertTrue(scrape.contains("controls_decision_latency_seconds_bucket"))
+        assertTrue(scrape.contains("controls_feature_resolution_latency_seconds_bucket"))
+        assertTrue(scrape.contains("controls_rule_evaluation_latency_seconds_bucket"))
+        assertTrue(scrape.contains("controls_scoring_latency_seconds_bucket"))
+        assertTrue(scrape.contains("controls_rule_fire_total{action_type=\"BLOCK\",mode=\"SHADOW\",rule_id=\"high-score\"} 1.0"))
+        assertTrue(scrape.contains("controls_shadow_rule_would_have_blocked_rate{rule_id=\"high-score\"} 0.5"))
+        assertTrue(scrape.contains("controls_scorer_score_divergence"))
+        assertTrue(scrape.contains("controls_scorer_decision_flip_rate"))
+    }
+}

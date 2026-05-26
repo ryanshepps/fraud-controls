@@ -20,6 +20,7 @@ import java.time.Instant
 class DecisionEngine(
     private val featureResolver: FeatureResolver,
     private val ruleEvaluator: RuleEvaluator = RuleEvaluator(),
+    private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
 ) {
     suspend fun decide(
         event: TransactionEvent,
@@ -27,12 +28,19 @@ class DecisionEngine(
         decidedAt: Instant,
     ): DecisioningResult {
         val context = ScoringContext(event)
-        val features = featureResolver.resolveRuleFeatures(
-            context = context,
-            featureNames = rules.flatMap { it.condition.featureNames() }.toSet(),
-        )
+        val features = timed {
+            featureResolver.resolveRuleFeatures(
+                context = context,
+                featureNames = rules.flatMap { it.condition.featureNames() }.toSet(),
+            )
+        }.also { metrics.recordFeatureResolutionLatency(it.elapsedMs) }.value
         val score = features.scoreResult()
-        val ruleEvaluation = ruleEvaluator.evaluate(features, rules)
+        val ruleEvaluation = timed {
+            ruleEvaluator.evaluate(features, rules)
+        }.also {
+            metrics.recordRuleEvaluationLatency(it.elapsedMs)
+            metrics.recordRuleEvaluation(it.value)
+        }.value
         val resolvedAction = ruleEvaluation.resolvedAction
 
         val decision = Decision(
@@ -63,17 +71,23 @@ class DecisionProcessor(
     private val auditSink: DecisionAuditSink = NoopDecisionAuditSink,
     private val decisionPublisher: DecisionPublisher = NoopDecisionPublisher,
     private val ruleEvaluationPublisher: RuleEvaluationPublisher = NoopRuleEvaluationPublisher,
+    private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
 ) {
     suspend fun process(
         event: TransactionEvent,
         rules: List<RuleDefinition>,
         decidedAt: Instant,
     ): DecisioningResult {
-        val result = engine.decide(event = event, rules = rules, decidedAt = decidedAt)
-        auditSink.record(result.record)
-        ruleEvaluationPublisher.publish(result.ruleEvaluation)
-        decisionPublisher.publish(result.decision)
-        return result
+        val result = timed {
+            val decisioningResult = engine.decide(event = event, rules = rules, decidedAt = decidedAt)
+            auditSink.record(decisioningResult.record)
+            ruleEvaluationPublisher.publish(decisioningResult.ruleEvaluation)
+            decisionPublisher.publish(decisioningResult.decision)
+            decisioningResult
+        }
+        metrics.recordDecision(result.value.decision)
+        metrics.recordDecisionLatency(result.elapsedMs)
+        return result.value
     }
 }
 
@@ -135,6 +149,20 @@ private suspend fun FeatureResolver.resolveRuleFeatures(
     }
 
     return FeatureSnapshot(eventId = context.eventId, values = values)
+}
+
+private data class Timed<T>(
+    val value: T,
+    val elapsedMs: Double,
+)
+
+private suspend fun <T> timed(block: suspend () -> T): Timed<T> {
+    val startedAt = System.nanoTime()
+    val value = block()
+    return Timed(
+        value = value,
+        elapsedMs = (System.nanoTime() - startedAt) / 1_000_000.0,
+    )
 }
 
 private fun FeatureSnapshot.scoreResult(): ScoreResult =

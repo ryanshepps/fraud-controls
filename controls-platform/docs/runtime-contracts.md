@@ -81,6 +81,44 @@ Current `schema_version`: `1`
 Required fields: `schema_version`, `event_id`, `matches`, `skipped`.
 `resolved_action` is present only when an enforce rule wins action resolution.
 
+## Kafka `shadow_evaluations` Payload
+
+Current `schema_version`: `1`
+
+```json
+{
+  "schema_version": 1,
+  "event_id": "evt-1",
+  "evaluations": [
+    {
+      "scorer_name": "live-model",
+      "scorer_version": "v1",
+      "role": "PRIMARY",
+      "score": {
+        "score": 0.1,
+        "raw_score": 0.14,
+        "contributing_factors": [
+          {"name": "fixed", "contribution": 0.1}
+        ],
+        "model_version": "fixed-v1",
+        "latency_ms": 1.0,
+        "degraded": false
+      }
+    },
+    {
+      "scorer_name": "candidate-model",
+      "scorer_version": "v2",
+      "role": "SHADOW",
+      "error": "timeout"
+    }
+  ]
+}
+```
+
+Required fields: `schema_version`, `event_id`, `evaluations`. Each evaluation
+requires `scorer_name`, `scorer_version`, `role`, and exactly one of `score` or
+`error`.
+
 ## DynamoDB Decision Audit Row
 
 Current `schema_version`: `1`

@@ -20,6 +20,7 @@ include(
     ":modules:scoring",
     ":modules:rules",
     ":modules:decisioning",
+    ":modules:observability",
     ":modules:persistence",
     ":modules:streaming",
     ":modules:api",

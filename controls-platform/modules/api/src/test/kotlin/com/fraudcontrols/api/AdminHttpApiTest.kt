@@ -158,6 +158,23 @@ class AdminHttpApiTest {
     }
 
     @Test
+    fun `metrics route exposes prometheus scrape when configured`() = testApplication {
+        application {
+            installControlsAdminRoutes(
+                ruleAdminService = RuleAdminService(),
+                decisionRecords = InMemoryDecisionRecordStore(),
+                globalKillSwitchService = GlobalKillSwitchService(),
+                metricsScrape = { "controls_decisions_total 1.0\n" },
+            )
+        }
+
+        val response = client.get("/metrics")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("controls_decisions_total 1.0\n", response.bodyAsText())
+    }
+
+    @Test
     fun `kafka rule change publisher writes audit events to rule changes topic`() = runTest {
         val producer = MockProducer<String, String>(true, StringSerializer(), StringSerializer())
         val publisher = KafkaRuleChangeAuditPublisher(producer)
