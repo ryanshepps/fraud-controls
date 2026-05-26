@@ -148,19 +148,6 @@ class DeviceGeoFeatureProvider(
         }
 }
 
-fun interface FraudModelScoreSource {
-    suspend fun score(context: ScoringContext): Double
-}
-
-class FraudModelScoreFeatureProvider(
-    private val scoreSource: FraudModelScoreSource,
-) : FeatureProvider {
-    override val featureName: String = FraudFeatureNames.FRAUD_MODEL_SCORE
-
-    override suspend fun compute(context: ScoringContext): FeatureValue =
-        FeatureValue.NumberValue(scoreSource.score(context))
-}
-
 fun defaultVelocityFeatureProviders(store: VelocityFeatureStore): List<FeatureProvider> =
     listOf(
         SenderVelocityFeatureProvider(

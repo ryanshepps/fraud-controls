@@ -1,4 +1,32 @@
-pythonSidecar:
-  endpoint: http://localhost:8090
-  timeoutMs: 150
-  defaultOnError: 0.50
+scoring:
+  features:
+    - name: fraud_model_score
+      provider: scorer
+      scorer: primary_scorer
+
+  scorers:
+    - name: primary_scorer
+      type: failover
+      primary: shadow_wrapped_xgb
+      # Use the heuristic scorer only when the model service is down, timing out, or returning errors.
+      fallback: heuristic
+      timeout_ms: 30
+
+    - name: shadow_wrapped_xgb
+      type: shadow
+      primary: xgboost_v1
+      shadows: [xgboost_v2_candidate]
+
+    - name: xgboost_v1
+      type: xgboost
+      sidecar_address: "scoring-sidecar:50051"
+      model_id: "fraud_xgb_v1"
+
+    - name: xgboost_v2_candidate
+      type: xgboost
+      sidecar_address: "scoring-sidecar:50051"
+      model_id: "fraud_xgb_v2"
+
+    - name: heuristic
+      type: rule_based
+      config_path: configs/heuristic.yaml

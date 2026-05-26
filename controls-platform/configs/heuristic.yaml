@@ -1,0 +1,12 @@
+rule_based:
+  intercept: -2.0
+  weights:
+    - feature: amount
+      weight: 0.001
+      missing_value: 0.0
+    - feature: is_new_counterparty
+      weight: 1.5
+      missing_value: 0.0
+    - feature: sender_account_age_days
+      weight: -0.03
+      missing_value: 30.0

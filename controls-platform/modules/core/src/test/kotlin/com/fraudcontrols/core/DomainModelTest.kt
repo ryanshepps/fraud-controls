@@ -42,9 +42,43 @@ class DomainModelTest {
         assertFailsWith<IllegalArgumentException> {
             ScoreResult(
                 score = 1.2,
-                band = RiskBand.HIGH,
-                factors = emptyList(),
-                latencyMs = 5,
+                rawScore = 4.0,
+                contributingFactors = emptyList(),
+                modelVersion = "heuristic_v1",
+                latencyMs = 5.0,
+            )
+        }
+    }
+
+    @Test
+    fun `score result requires audit metadata`() {
+        assertFailsWith<IllegalArgumentException> {
+            ScoreResult(
+                score = 0.5,
+                rawScore = Double.NaN,
+                contributingFactors = emptyList(),
+                modelVersion = "heuristic_v1",
+                latencyMs = 5.0,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            ScoreResult(
+                score = 0.5,
+                rawScore = null,
+                contributingFactors = emptyList(),
+                modelVersion = "",
+                latencyMs = 5.0,
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            ScoreResult(
+                score = 0.5,
+                rawScore = null,
+                contributingFactors = emptyList(),
+                modelVersion = "heuristic_v1",
+                latencyMs = Double.POSITIVE_INFINITY,
             )
         }
     }
