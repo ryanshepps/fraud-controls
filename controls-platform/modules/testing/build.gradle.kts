@@ -1,3 +1,18 @@
 dependencies {
     api(project(":modules:core"))
+    testImplementation(project(":modules:decisioning"))
+    testImplementation(project(":modules:features"))
+    testImplementation(project(":modules:persistence"))
+    testImplementation(project(":modules:rules"))
+    testImplementation(project(":modules:scoring"))
+    testImplementation(project(":modules:streaming"))
+    testImplementation(kotlin("test"))
+    testImplementation("org.apache.kafka:kafka-clients:3.8.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:redpanda:1.20.4")
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("redis.clients:jedis:5.2.0")
+    testImplementation("software.amazon.awssdk:dynamodb:2.29.6")
 }
