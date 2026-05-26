@@ -19,12 +19,12 @@ scoring:
 
     - name: xgboost_v1
       type: xgboost
-      sidecar_address: "scoring-sidecar:50051"
+      sidecar_address: "http://localhost:50051/score"
       model_id: "fraud_xgb_v1"
 
     - name: xgboost_v2_candidate
       type: xgboost
-      sidecar_address: "scoring-sidecar:50051"
+      sidecar_address: "http://localhost:50051/score"
       model_id: "fraud_xgb_v2"
 
     - name: heuristic
