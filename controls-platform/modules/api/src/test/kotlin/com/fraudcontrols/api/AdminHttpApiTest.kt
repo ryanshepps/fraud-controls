@@ -40,7 +40,6 @@ class AdminHttpApiTest {
             installControlsAdminRoutes(
                 ruleAdminService = rules,
                 decisionRecords = InMemoryDecisionRecordStore(),
-                globalKillSwitchService = GlobalKillSwitchService(auditPublisher = audit, clock = clock),
             )
         }
 
@@ -89,7 +88,6 @@ class AdminHttpApiTest {
             installControlsAdminRoutes(
                 ruleAdminService = RuleAdminService(),
                 decisionRecords = InMemoryDecisionRecordStore(),
-                globalKillSwitchService = GlobalKillSwitchService(),
             )
         }
 
@@ -122,7 +120,6 @@ class AdminHttpApiTest {
             installControlsAdminRoutes(
                 ruleAdminService = RuleAdminService(),
                 decisionRecords = store,
-                globalKillSwitchService = GlobalKillSwitchService(),
             )
         }
 
@@ -135,26 +132,20 @@ class AdminHttpApiTest {
     }
 
     @Test
-    fun `global kill switch publishes audit event`() = testApplication {
-        val audit = InMemoryRuleChangeAuditPublisher()
+    fun `admin API does not expose removed global emergency endpoint`() = testApplication {
         application {
             installControlsAdminRoutes(
-                ruleAdminService = RuleAdminService(auditPublisher = audit, clock = clock),
+                ruleAdminService = RuleAdminService(),
                 decisionRecords = InMemoryDecisionRecordStore(),
-                globalKillSwitchService = GlobalKillSwitchService(auditPublisher = audit, clock = clock),
             )
         }
 
         val response = client.post("/admin/global-kill") {
             contentType(ContentType.Application.Json)
-            setBody("""{"actor":"ops","mode":"fail_closed"}""")
+            setBody("""{"actor":"ops"}""")
         }
 
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("fail_closed"))
-        assertEquals(RuleChangeType.GLOBAL_KILL_SWITCH, audit.events().single().changeType)
-        assertEquals("global", audit.events().single().ruleId)
-        assertEquals("ops", audit.events().single().actor)
+        assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
@@ -163,7 +154,6 @@ class AdminHttpApiTest {
             installControlsAdminRoutes(
                 ruleAdminService = RuleAdminService(),
                 decisionRecords = InMemoryDecisionRecordStore(),
-                globalKillSwitchService = GlobalKillSwitchService(),
                 metricsScrape = { "controls_decisions_total 1.0\n" },
             )
         }
