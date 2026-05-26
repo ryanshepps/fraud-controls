@@ -10,36 +10,42 @@ class RuleEvaluator {
         snapshot: FeatureSnapshot,
         rules: List<RuleDefinition>,
     ): RuleEvaluationResult {
-        val matches = mutableListOf<RuleMatch>()
-        val skipped = mutableListOf<SkippedRule>()
+        val evaluations = mutableListOf<RuleEvaluationDetail>()
 
         for (rule in rules) {
+            val featureValues = rule.condition.auditFeatureValues(snapshot)
             if (rule.effectiveMode == RuleMode.DISABLED) {
-                skipped += SkippedRule(rule.id, rule.version, "rule is disabled")
+                evaluations += rule.toEvaluationDetail(
+                    conditionResult = RuleEvaluationConditionResult.DISABLED,
+                    skippedReason = "rule is disabled",
+                    featureValues = featureValues,
+                )
                 continue
             }
 
             when (val conditionResult = evaluateCondition(rule.condition, snapshot)) {
-                ConditionResult.Matched -> matches += RuleMatch(
-                    ruleId = rule.id,
-                    ruleVersion = rule.version,
-                    mode = rule.effectiveMode,
-                    priority = rule.priority,
-                    action = rule.action,
+                ConditionResult.Matched -> evaluations += rule.toEvaluationDetail(
+                    conditionResult = RuleEvaluationConditionResult.MATCHED,
+                    skippedReason = null,
+                    featureValues = featureValues,
                 )
-                ConditionResult.NotMatched -> Unit
-                is ConditionResult.Unavailable -> skipped += SkippedRule(
-                    ruleId = rule.id,
-                    ruleVersion = rule.version,
-                    reason = conditionResult.reason,
+                ConditionResult.NotMatched -> evaluations += rule.toEvaluationDetail(
+                    conditionResult = RuleEvaluationConditionResult.NOT_MATCHED,
+                    skippedReason = null,
+                    featureValues = featureValues,
+                )
+                is ConditionResult.Unavailable -> evaluations += rule.toEvaluationDetail(
+                    conditionResult = RuleEvaluationConditionResult.UNAVAILABLE,
+                    skippedReason = conditionResult.reason,
+                    featureValues = featureValues,
                 )
             }
         }
 
+        val matches = evaluations.mapNotNull { it.toRuleMatch() }
         return RuleEvaluationResult(
             eventId = snapshot.eventId,
-            matches = matches,
-            skipped = skipped,
+            evaluations = evaluations,
             resolvedAction = ActionResolver().resolve(matches),
         )
     }
@@ -214,6 +220,9 @@ class RuleEvaluator {
 
 class ActionResolver {
     fun resolve(matches: List<RuleMatch>): ResolvedRuleAction? =
+        resolutionCandidates(matches).firstOrNull()
+
+    fun resolutionCandidates(matches: List<RuleMatch>): List<ResolvedRuleAction> =
         matches
             .asSequence()
             .filter { it.mode == RuleMode.ENFORCE }
@@ -233,15 +242,75 @@ class ActionResolver {
                     .thenByDescending { it.decisionAction.severity() }
                     .thenBy { it.ruleId },
             )
-            .firstOrNull()
+            .toList()
 }
 
 data class RuleEvaluationResult(
     val eventId: EventId,
-    val matches: List<RuleMatch>,
-    val skipped: List<SkippedRule>,
+    val evaluations: List<RuleEvaluationDetail>,
     val resolvedAction: ResolvedRuleAction?,
-)
+) {
+    val matches: List<RuleMatch> = evaluations.mapNotNull { it.toRuleMatch() }
+    val skipped: List<SkippedRule> = evaluations.mapNotNull { it.toSkippedRule() }
+    val resolutionCandidates: List<ResolvedRuleAction> = ActionResolver().resolutionCandidates(matches)
+}
+
+data class RuleEvaluationDetail(
+    val ruleId: String,
+    val ruleVersion: Int,
+    val mode: RuleMode,
+    val priority: Int,
+    val conditionResult: RuleEvaluationConditionResult,
+    val action: RuleAction,
+    val featureValues: Map<String, FeatureValue>,
+    val skippedReason: String? = null,
+) {
+    init {
+        require(ruleId.isNotBlank()) { "evaluated rule id must not be blank" }
+        require(ruleVersion > 0) { "evaluated rule version must be positive" }
+        require(featureValues.keys.none { it.isBlank() }) { "evaluated feature names must not be blank" }
+        if (conditionResult.isSkipped) {
+            require(!skippedReason.isNullOrBlank()) { "skipped rule reason must not be blank" }
+        } else {
+            require(skippedReason == null) { "non-skipped rule must not include a skipped reason" }
+        }
+    }
+
+    fun toRuleMatch(): RuleMatch? =
+        if (conditionResult == RuleEvaluationConditionResult.MATCHED) {
+            RuleMatch(
+                ruleId = ruleId,
+                ruleVersion = ruleVersion,
+                mode = mode,
+                priority = priority,
+                action = action,
+            )
+        } else {
+            null
+        }
+
+    fun toSkippedRule(): SkippedRule? =
+        if (conditionResult.isSkipped) {
+            SkippedRule(
+                ruleId = ruleId,
+                ruleVersion = ruleVersion,
+                reason = skippedReason ?: error("skipped reason invariant violated"),
+            )
+        } else {
+            null
+        }
+}
+
+enum class RuleEvaluationConditionResult {
+    MATCHED,
+    NOT_MATCHED,
+    UNAVAILABLE,
+    DISABLED,
+    ;
+
+    val isSkipped: Boolean
+        get() = this == UNAVAILABLE || this == DISABLED
+}
 
 data class RuleMatch(
     val ruleId: String,
@@ -279,6 +348,27 @@ private sealed interface MatchResult {
     data class Available(val matched: Boolean) : MatchResult
     data class Invalid(val reason: String) : MatchResult
 }
+
+private fun RuleDefinition.toEvaluationDetail(
+    conditionResult: RuleEvaluationConditionResult,
+    skippedReason: String?,
+    featureValues: Map<String, FeatureValue>,
+): RuleEvaluationDetail =
+    RuleEvaluationDetail(
+        ruleId = id,
+        ruleVersion = version,
+        mode = effectiveMode,
+        priority = priority,
+        conditionResult = conditionResult,
+        action = action,
+        featureValues = featureValues,
+        skippedReason = skippedReason,
+    )
+
+private fun RuleCondition.auditFeatureValues(snapshot: FeatureSnapshot): Map<String, FeatureValue> =
+    featureNames().associateWith { featureName ->
+        snapshot.values[featureName] ?: FeatureValue.Missing("feature not present in snapshot")
+    }
 
 private fun DecisionAction.severity(): Int =
     when (this) {

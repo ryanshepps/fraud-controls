@@ -71,6 +71,21 @@ sealed interface RuleCondition {
     ) : RuleCondition
 }
 
+fun RuleCondition.featureNames(): Set<String> {
+    val names = linkedSetOf<String>()
+    collectFeatureNames(names)
+    return names
+}
+
+private fun RuleCondition.collectFeatureNames(names: MutableSet<String>) {
+    when (this) {
+        is RuleCondition.All -> conditions.forEach { it.collectFeatureNames(names) }
+        is RuleCondition.Any -> conditions.forEach { it.collectFeatureNames(names) }
+        is RuleCondition.Comparison -> names += featureName
+        is RuleCondition.Not -> condition.collectFeatureNames(names)
+    }
+}
+
 enum class ComparisonOperator {
     EQ,
     NEQ,

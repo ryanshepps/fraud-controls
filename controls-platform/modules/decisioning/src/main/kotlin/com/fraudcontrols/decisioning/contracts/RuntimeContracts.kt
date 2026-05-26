@@ -7,6 +7,8 @@ import com.fraudcontrols.core.FeatureValue
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.decisioning.DecisionRecord
 import com.fraudcontrols.rules.ResolvedRuleAction
+import com.fraudcontrols.rules.RuleAction
+import com.fraudcontrols.rules.RuleEvaluationDetail
 import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleMatch
 import com.fraudcontrols.rules.SkippedRule
@@ -24,8 +26,8 @@ import kotlinx.serialization.json.put
 
 object RuntimeContractVersions {
     const val DECISION_EVENT = 1
-    const val RULE_EVALUATION_EVENT = 1
-    const val DECISION_AUDIT_ROW = 1
+    const val RULE_EVALUATION_EVENT = 2
+    const val DECISION_AUDIT_ROW = 2
 }
 
 data class DecisionAuditRowContract(
@@ -65,6 +67,8 @@ fun RuleEvaluationResult.toRuleEvaluationEventJsonObject(): JsonObject =
         put("event_id", eventId.value)
         put("matches", JsonArray(matches.map { it.toJsonObject() }))
         put("skipped", JsonArray(skipped.map { it.toJsonObject() }))
+        put("evaluations", JsonArray(evaluations.map { it.toJsonObject() }))
+        put("conflict_resolution", conflictResolutionJsonObject())
         resolvedAction?.let { put("resolved_action", it.toJsonObject()) }
     }
 
@@ -152,6 +156,7 @@ private fun RuleMatch.toJsonObject(): JsonObject =
         put("mode", mode.name)
         put("priority", priority)
         put("action_type", action.type.name)
+        put("action", action.toJsonObject())
         action.reasonCode?.let { put("reason_code", it.value) }
     }
 
@@ -169,7 +174,36 @@ private fun ResolvedRuleAction.toJsonObject(): JsonObject =
         put("decision_action", decisionAction.name)
         put("priority", priority)
         put("action_type", action.type.name)
+        put("action", action.toJsonObject())
         action.reasonCode?.let { put("reason_code", it.value) }
+    }
+
+private fun RuleEvaluationDetail.toJsonObject(): JsonObject =
+    buildJsonObject {
+        put("rule_id", ruleId)
+        put("rule_version", ruleVersion)
+        put("mode", mode.name)
+        put("priority", priority)
+        put("condition_result", conditionResult.name)
+        skippedReason?.let { put("skipped_reason", it) }
+        put("action", action.toJsonObject())
+        put("feature_values", JsonObject(featureValues.mapValues { (_, value) -> value.toJsonValue() }))
+    }
+
+private fun RuleEvaluationResult.conflictResolutionJsonObject(): JsonObject =
+    buildJsonObject {
+        put("strategy", "enforce_matches_by_priority_desc_severity_desc_rule_id_asc")
+        put("candidates", JsonArray(resolutionCandidates.map { it.toJsonObject() }))
+        resolvedAction?.let { put("selected", it.toJsonObject()) }
+    }
+
+private fun RuleAction.toJsonObject(): JsonObject =
+    buildJsonObject {
+        put("type", type.name)
+        reasonCode?.let { put("reason_code", it.value) }
+        put("reversible", reversible)
+        queue?.let { put("queue", it) }
+        tag?.let { put("tag", it) }
     }
 
 private fun Iterable<String>.toJsonArray(): JsonArray =

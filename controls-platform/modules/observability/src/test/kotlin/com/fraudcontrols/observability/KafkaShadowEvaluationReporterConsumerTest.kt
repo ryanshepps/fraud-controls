@@ -44,7 +44,7 @@ class KafkaShadowEvaluationReporterConsumerTest {
                 "evt-1",
                 """
                 {
-                  "schema_version": 1,
+                  "schema_version": 2,
                   "event_id": "evt-1",
                   "matches": [
                     {
