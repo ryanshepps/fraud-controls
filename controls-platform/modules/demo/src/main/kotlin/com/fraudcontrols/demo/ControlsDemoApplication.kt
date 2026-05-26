@@ -1,7 +1,6 @@
 package com.fraudcontrols.demo
 
 import com.fraudcontrols.api.GlobalKillSwitchService
-import com.fraudcontrols.api.InMemoryDecisionRecordStore
 import com.fraudcontrols.api.KafkaRuleChangeAuditPublisher
 import com.fraudcontrols.api.RuleAdminService
 import com.fraudcontrols.api.startAdminHttpServer
@@ -23,6 +22,7 @@ import com.fraudcontrols.observability.KafkaShadowEvaluationSink
 import com.fraudcontrols.observability.MicrometerControlsMetrics
 import com.fraudcontrols.observability.ShadowEvaluationReporter
 import com.fraudcontrols.observability.kafkaShadowReporterConsumer
+import com.fraudcontrols.persistence.DynamoDecisionAuditReader
 import com.fraudcontrols.persistence.DynamoDecisionAuditSink
 import com.fraudcontrols.persistence.RedisVelocityFeatureStore
 import com.fraudcontrols.rules.ComparisonOperator
@@ -104,7 +104,7 @@ fun main() {
         val producer = kafkaStringProducer(config.kafkaBootstrapServers)
         val controlsMetrics = MicrometerControlsMetrics()
         val metricsAdapter = DecisioningMetricsAdapter(controlsMetrics)
-        val decisionRecordStore = InMemoryDecisionRecordStore()
+        val decisionAuditReader = DynamoDecisionAuditReader(dynamoClient, config.auditTable)
         val ruleAdminService = RuleAdminService(
             initialRules = demoRules(),
             auditPublisher = KafkaRuleChangeAuditPublisher(producer, config.ruleChangesTopic),
@@ -127,7 +127,6 @@ fun main() {
             ),
             auditSink = FanOutDecisionAuditSink(
                 DynamoDecisionAuditSink(dynamoClient, config.auditTable),
-                decisionRecordStore,
             ),
             decisionPublisher = KafkaDecisionPublisher(producer, config.decisionsTopic),
             ruleEvaluationPublisher = KafkaRuleEvaluationPublisher(producer, config.ruleEvaluationsTopic),
@@ -163,7 +162,7 @@ fun main() {
 
         startAdminHttpServer(
             ruleAdminService = ruleAdminService,
-            decisionRecords = decisionRecordStore,
+            decisionRecords = decisionAuditReader,
             globalKillSwitchService = GlobalKillSwitchService(
                 auditPublisher = KafkaRuleChangeAuditPublisher(producer, config.ruleChangesTopic),
             ),

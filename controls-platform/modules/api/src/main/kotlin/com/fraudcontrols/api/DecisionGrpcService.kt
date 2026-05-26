@@ -4,8 +4,8 @@ import com.fraudcontrols.core.Decision
 import com.fraudcontrols.core.DecisionAction
 import com.fraudcontrols.core.EventId
 import com.fraudcontrols.decisioning.DecisionProcessor
-import com.fraudcontrols.decisioning.DecisionRecord as DomainDecisionRecord
-import com.fraudcontrols.decisioning.contracts.toDecisionAuditRowContract
+import com.fraudcontrols.decisioning.DecisionRecordReader
+import com.fraudcontrols.decisioning.contracts.DecisionAuditRowContract
 import com.fraudcontrols.decisioning.v1.DecisionAction as ProtoDecisionAction
 import com.fraudcontrols.decisioning.v1.DecisionRecord as ProtoDecisionRecord
 import com.fraudcontrols.decisioning.v1.DecisionServiceGrpcKt
@@ -53,10 +53,11 @@ class GrpcDecisionService(
     }
 
     override suspend fun getDecision(request: GetDecisionRequest): ProtoDecisionRecord {
-        val eventId = request.eventId.trim()
-        if (eventId.isBlank()) {
+        val eventId = try {
+            parseDecisionLookupEventId(request.eventId)
+        } catch (error: IllegalArgumentException) {
             throw Status.INVALID_ARGUMENT
-                .withDescription("event_id is required")
+                .withDescription(error.message)
                 .asRuntimeException()
         }
 
@@ -88,22 +89,23 @@ private fun Decision.toEvaluateResponse(): EvaluateResponse =
         .setDecidedAt(decidedAt.toString())
         .build()
 
-private fun DomainDecisionRecord.toProto(): ProtoDecisionRecord {
-    val row = toDecisionAuditRowContract()
-    return ProtoDecisionRecord.newBuilder()
-        .setSchemaVersion(row.schemaVersion)
-        .setEventId(row.eventId)
-        .setDecidedAt(row.decidedAt)
-        .setAction(decision.action.toProto())
-        .addAllReasonCodes(row.reasonCodes)
-        .setScore(row.score)
-        .setModelVersion(row.modelVersion)
-        .setScoreJson(row.scoreJson)
-        .addAllRuleEvaluationIds(row.ruleEvaluationIds)
-        .setFeaturesJson(row.featuresJson)
-        .setRuleEvaluationJson(row.ruleEvaluationJson)
+private fun DecisionAuditRowContract.toProto(): ProtoDecisionRecord =
+    ProtoDecisionRecord.newBuilder()
+        .setSchemaVersion(schemaVersion)
+        .setEventId(eventId)
+        .setDecidedAt(decidedAt)
+        .setAction(action.toDecisionAction().toProto())
+        .addAllReasonCodes(reasonCodes)
+        .setScore(score)
+        .setModelVersion(modelVersion)
+        .setScoreJson(scoreJson)
+        .addAllRuleEvaluationIds(ruleEvaluationIds)
+        .setFeaturesJson(featuresJson)
+        .setRuleEvaluationJson(ruleEvaluationJson)
         .build()
-}
+
+private fun String.toDecisionAction(): DecisionAction =
+    DecisionAction.valueOf(this)
 
 private fun DecisionAction.toProto(): ProtoDecisionAction =
     when (this) {

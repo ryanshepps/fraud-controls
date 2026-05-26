@@ -95,6 +95,9 @@ fun errorJson(message: String): String =
         put("error", message)
     }.toString()
 
+fun DecisionAuditRowContract.toApiJsonObject(): JsonObject =
+    toJsonObject()
+
 private fun DecisionAuditRowContract.toJsonObject(): JsonObject =
     buildJsonObject {
         put("schema_version", schemaVersion)

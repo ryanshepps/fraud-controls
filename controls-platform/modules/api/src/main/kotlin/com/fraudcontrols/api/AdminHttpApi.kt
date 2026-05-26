@@ -1,6 +1,7 @@
 package com.fraudcontrols.api
 
 import com.fraudcontrols.core.EventId
+import com.fraudcontrols.decisioning.DecisionRecordReader
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -112,7 +113,12 @@ fun Application.installControlsAdminRoutes(
         }
 
         get("/decisions/{event_id}") {
-            val eventId = call.parameters["event_id"].orEmpty()
+            val eventId = try {
+                parseDecisionLookupEventId(call.parameters["event_id"].orEmpty())
+            } catch (error: IllegalArgumentException) {
+                call.respondJson(errorJson(error.message.orEmpty()), HttpStatusCode.BadRequest)
+                return@get
+            }
             val record = decisionRecords.find(EventId(eventId))
             if (record == null) {
                 call.respondJson(errorJson("decision not found: $eventId"), HttpStatusCode.NotFound)
@@ -138,6 +144,12 @@ fun Application.installControlsAdminRoutes(
             }
         }
     }
+}
+
+internal fun parseDecisionLookupEventId(rawEventId: String): String {
+    val eventId = rawEventId.trim()
+    require(eventId.isNotBlank()) { "event_id is required" }
+    return eventId
 }
 
 fun startAdminHttpServer(
