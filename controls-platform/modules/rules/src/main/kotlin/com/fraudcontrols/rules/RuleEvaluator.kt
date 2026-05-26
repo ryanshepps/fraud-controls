@@ -4,7 +4,6 @@ import com.fraudcontrols.core.DecisionAction
 import com.fraudcontrols.core.EventId
 import com.fraudcontrols.core.FeatureSnapshot
 import com.fraudcontrols.core.FeatureValue
-import com.fraudcontrols.core.ReasonCode
 
 class RuleEvaluator {
     fun evaluate(
@@ -15,10 +14,25 @@ class RuleEvaluator {
         val skipped = mutableListOf<SkippedRule>()
 
         for (rule in rules) {
+            if (rule.effectiveMode == RuleMode.DISABLED) {
+                skipped += SkippedRule(rule.id, rule.version, "rule is disabled")
+                continue
+            }
+
             when (val conditionResult = evaluateCondition(rule.condition, snapshot)) {
-                ConditionResult.Matched -> matches += RuleMatch(rule.id, rule.action, rule.reasonCode)
+                ConditionResult.Matched -> matches += RuleMatch(
+                    ruleId = rule.id,
+                    ruleVersion = rule.version,
+                    mode = rule.effectiveMode,
+                    priority = rule.priority,
+                    action = rule.action,
+                )
                 ConditionResult.NotMatched -> Unit
-                is ConditionResult.Unavailable -> skipped += SkippedRule(rule.id, conditionResult.reason)
+                is ConditionResult.Unavailable -> skipped += SkippedRule(
+                    ruleId = rule.id,
+                    ruleVersion = rule.version,
+                    reason = conditionResult.reason,
+                )
             }
         }
 
@@ -26,6 +40,7 @@ class RuleEvaluator {
             eventId = snapshot.eventId,
             matches = matches,
             skipped = skipped,
+            resolvedAction = ActionResolver().resolve(matches),
         )
     }
 
@@ -35,9 +50,9 @@ class RuleEvaluator {
     ): ConditionResult =
         when (condition) {
             is RuleCondition.All -> evaluateAll(condition.conditions, snapshot)
-            is RuleCondition.BooleanEquals -> evaluateBoolean(condition, snapshot)
-            is RuleCondition.NumberCompare -> evaluateNumber(condition, snapshot)
-            is RuleCondition.TextEquals -> evaluateText(condition, snapshot)
+            is RuleCondition.Any -> evaluateAny(condition.conditions, snapshot)
+            is RuleCondition.Comparison -> evaluateComparison(condition, snapshot)
+            is RuleCondition.Not -> evaluateNot(condition.condition, snapshot)
         }
 
     private fun evaluateAll(
@@ -61,133 +76,180 @@ class RuleEvaluator {
         }
     }
 
-    private fun evaluateNumber(
-        condition: RuleCondition.NumberCompare,
+    private fun evaluateAny(
+        conditions: List<RuleCondition>,
         snapshot: FeatureSnapshot,
     ): ConditionResult {
-        val value = snapshot.values[condition.featureName]
-            ?: return ConditionResult.Unavailable("missing numeric feature: ${condition.featureName}")
-        if (value !is FeatureValue.NumberValue) {
-            return ConditionResult.Unavailable(
-                "feature ${condition.featureName} expected numeric but was ${value.typeName()}",
-            )
+        val unavailableReasons = mutableListOf<String>()
+
+        for (condition in conditions) {
+            when (val result = evaluateCondition(condition, snapshot)) {
+                ConditionResult.Matched -> return ConditionResult.Matched
+                ConditionResult.NotMatched -> Unit
+                is ConditionResult.Unavailable -> unavailableReasons += result.reason
+            }
         }
 
-        val matched = when (condition.operator) {
-            NumericOperator.GREATER_THAN -> value.value > condition.threshold
-            NumericOperator.GREATER_THAN_OR_EQUAL -> value.value >= condition.threshold
-            NumericOperator.LESS_THAN -> value.value < condition.threshold
-            NumericOperator.LESS_THAN_OR_EQUAL -> value.value <= condition.threshold
-            NumericOperator.EQUAL -> value.value == condition.threshold
+        return if (unavailableReasons.isEmpty()) {
+            ConditionResult.NotMatched
+        } else {
+            ConditionResult.Unavailable(unavailableReasons.joinToString("; "))
         }
-
-        return if (matched) ConditionResult.Matched else ConditionResult.NotMatched
     }
 
-    private fun evaluateBoolean(
-        condition: RuleCondition.BooleanEquals,
+    private fun evaluateNot(
+        condition: RuleCondition,
+        snapshot: FeatureSnapshot,
+    ): ConditionResult =
+        when (val result = evaluateCondition(condition, snapshot)) {
+            ConditionResult.Matched -> ConditionResult.NotMatched
+            ConditionResult.NotMatched -> ConditionResult.Matched
+            is ConditionResult.Unavailable -> result
+        }
+
+    private fun evaluateComparison(
+        condition: RuleCondition.Comparison,
         snapshot: FeatureSnapshot,
     ): ConditionResult {
-        val value = snapshot.values[condition.featureName]
-            ?: return ConditionResult.Unavailable("missing boolean feature: ${condition.featureName}")
-        if (value !is FeatureValue.BooleanValue) {
-            return ConditionResult.Unavailable(
-                "feature ${condition.featureName} expected boolean but was ${value.typeName()}",
+        val featureValue = snapshot.values[condition.featureName]
+            ?: return ConditionResult.Unavailable("missing feature: ${condition.featureName}")
+
+        return when (featureValue) {
+            is FeatureValue.Missing -> ConditionResult.Unavailable(
+                "feature ${condition.featureName} missing: ${featureValue.reason}",
+            )
+            is FeatureValue.Unavailable -> ConditionResult.Unavailable(
+                "feature ${condition.featureName} unavailable: ${featureValue.reason}",
+            )
+            else -> compareAvailableValue(
+                featureName = condition.featureName,
+                featureValue = featureValue,
+                operator = condition.operator,
+                expected = condition.value,
             )
         }
-
-        return if (value.value == condition.expected) ConditionResult.Matched else ConditionResult.NotMatched
     }
 
-    private fun evaluateText(
-        condition: RuleCondition.TextEquals,
-        snapshot: FeatureSnapshot,
+    private fun compareAvailableValue(
+        featureName: String,
+        featureValue: FeatureValue,
+        operator: ComparisonOperator,
+        expected: RuleValue,
     ): ConditionResult {
-        val value = snapshot.values[condition.featureName]
-            ?: return ConditionResult.Unavailable("missing text feature: ${condition.featureName}")
-        if (value !is FeatureValue.TextValue) {
-            return ConditionResult.Unavailable(
-                "feature ${condition.featureName} expected text but was ${value.typeName()}",
+        val matchResult = when (operator) {
+            ComparisonOperator.EQ -> MatchResult.Available(valuesEqual(featureValue, expected))
+            ComparisonOperator.NEQ -> MatchResult.Available(!valuesEqual(featureValue, expected))
+            ComparisonOperator.LT -> compareNumbers(featureName, featureValue, expected) { actual, threshold -> actual < threshold }
+            ComparisonOperator.LTE -> compareNumbers(featureName, featureValue, expected) { actual, threshold -> actual <= threshold }
+            ComparisonOperator.GT -> compareNumbers(featureName, featureValue, expected) { actual, threshold -> actual > threshold }
+            ComparisonOperator.GTE -> compareNumbers(featureName, featureValue, expected) { actual, threshold -> actual >= threshold }
+            ComparisonOperator.IN -> inSet(featureName, featureValue, expected)
+            ComparisonOperator.NOT_IN -> when (val result = inSet(featureName, featureValue, expected)) {
+                is MatchResult.Available -> MatchResult.Available(!result.matched)
+                is MatchResult.Invalid -> result
+            }
+        }
+
+        return when (matchResult) {
+            is MatchResult.Available -> if (matchResult.matched) ConditionResult.Matched else ConditionResult.NotMatched
+            is MatchResult.Invalid -> ConditionResult.Unavailable(matchResult.reason)
+        }
+    }
+
+    private fun valuesEqual(
+        featureValue: FeatureValue,
+        expected: RuleValue,
+    ): Boolean =
+        when (featureValue) {
+            is FeatureValue.BooleanValue -> expected == RuleValue.BooleanValue(featureValue.value)
+            is FeatureValue.NumberValue -> expected == RuleValue.NumberValue(featureValue.value)
+            is FeatureValue.SetValue -> expected == RuleValue.SetValue(featureValue.values.map { RuleValue.TextValue(it) }.toSet())
+            is FeatureValue.TextValue -> expected == RuleValue.TextValue(featureValue.value)
+            is FeatureValue.Missing,
+            is FeatureValue.Unavailable,
+            -> false
+        }
+
+    private fun compareNumbers(
+        featureName: String,
+        featureValue: FeatureValue,
+        expected: RuleValue,
+        predicate: (Double, Double) -> Boolean,
+    ): MatchResult =
+        when {
+            featureValue !is FeatureValue.NumberValue -> MatchResult.Invalid(
+                "feature $featureName expected numeric for comparison but was ${featureValue.typeName()}",
+            )
+            expected !is RuleValue.NumberValue -> MatchResult.Invalid(
+                "rule value for $featureName expected numeric for comparison but was ${expected.typeName()}",
+            )
+            else -> MatchResult.Available(predicate(featureValue.value, expected.value))
+        }
+
+    private fun inSet(
+        featureName: String,
+        featureValue: FeatureValue,
+        expected: RuleValue,
+    ): MatchResult =
+        if (expected !is RuleValue.SetValue) {
+            MatchResult.Invalid("rule value for $featureName expected set for membership but was ${expected.typeName()}")
+        } else {
+            MatchResult.Available(
+                when (featureValue) {
+                    is FeatureValue.BooleanValue -> expected.values.contains(RuleValue.BooleanValue(featureValue.value))
+                    is FeatureValue.NumberValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
+                    is FeatureValue.SetValue -> featureValue.values.any { expected.values.contains(RuleValue.TextValue(it)) }
+                    is FeatureValue.TextValue -> expected.values.contains(RuleValue.TextValue(featureValue.value))
+                    is FeatureValue.Missing,
+                    is FeatureValue.Unavailable,
+                    -> false
+                },
             )
         }
-
-        return if (value.value == condition.expected) ConditionResult.Matched else ConditionResult.NotMatched
-    }
 }
 
-data class RuleDefinition(
-    val id: String,
-    val action: DecisionAction,
-    val reasonCode: ReasonCode,
-    val condition: RuleCondition,
-) {
-    init {
-        require(id.isNotBlank()) { "rule id must not be blank" }
-    }
-}
-
-sealed interface RuleCondition {
-    data class NumberCompare(
-        val featureName: String,
-        val operator: NumericOperator,
-        val threshold: Double,
-    ) : RuleCondition {
-        init {
-            require(featureName.isNotBlank()) { "feature name must not be blank" }
-            require(threshold.isFinite()) { "numeric threshold must be finite" }
-        }
-    }
-
-    data class BooleanEquals(
-        val featureName: String,
-        val expected: Boolean,
-    ) : RuleCondition {
-        init {
-            require(featureName.isNotBlank()) { "feature name must not be blank" }
-        }
-    }
-
-    data class TextEquals(
-        val featureName: String,
-        val expected: String,
-    ) : RuleCondition {
-        init {
-            require(featureName.isNotBlank()) { "feature name must not be blank" }
-            require(expected.isNotBlank()) { "expected text must not be blank" }
-        }
-    }
-
-    data class All(
-        val conditions: List<RuleCondition>,
-    ) : RuleCondition {
-        init {
-            require(conditions.isNotEmpty()) { "all condition must include at least one condition" }
-        }
-    }
-}
-
-enum class NumericOperator {
-    GREATER_THAN,
-    GREATER_THAN_OR_EQUAL,
-    LESS_THAN,
-    LESS_THAN_OR_EQUAL,
-    EQUAL,
+class ActionResolver {
+    fun resolve(matches: List<RuleMatch>): ResolvedRuleAction? =
+        matches
+            .asSequence()
+            .filter { it.mode == RuleMode.ENFORCE }
+            .mapNotNull { match ->
+                match.action.decisionAction()?.let { decisionAction ->
+                    ResolvedRuleAction(
+                        ruleId = match.ruleId,
+                        ruleVersion = match.ruleVersion,
+                        decisionAction = decisionAction,
+                        action = match.action,
+                        priority = match.priority,
+                    )
+                }
+            }
+            .sortedWith(
+                compareByDescending<ResolvedRuleAction> { it.priority }
+                    .thenByDescending { it.decisionAction.severity() }
+                    .thenBy { it.ruleId },
+            )
+            .firstOrNull()
 }
 
 data class RuleEvaluationResult(
     val eventId: EventId,
     val matches: List<RuleMatch>,
     val skipped: List<SkippedRule>,
+    val resolvedAction: ResolvedRuleAction?,
 )
 
 data class RuleMatch(
     val ruleId: String,
-    val action: DecisionAction,
-    val reasonCode: ReasonCode,
+    val ruleVersion: Int,
+    val mode: RuleMode,
+    val priority: Int,
+    val action: RuleAction,
 )
 
 data class SkippedRule(
     val ruleId: String,
+    val ruleVersion: Int,
     val reason: String,
 ) {
     init {
@@ -195,11 +257,32 @@ data class SkippedRule(
     }
 }
 
+data class ResolvedRuleAction(
+    val ruleId: String,
+    val ruleVersion: Int,
+    val decisionAction: DecisionAction,
+    val action: RuleAction,
+    val priority: Int,
+)
+
 private sealed interface ConditionResult {
     data object Matched : ConditionResult
     data object NotMatched : ConditionResult
     data class Unavailable(val reason: String) : ConditionResult
 }
+
+private sealed interface MatchResult {
+    data class Available(val matched: Boolean) : MatchResult
+    data class Invalid(val reason: String) : MatchResult
+}
+
+private fun DecisionAction.severity(): Int =
+    when (this) {
+        DecisionAction.ALLOW -> 0
+        DecisionAction.CHALLENGE -> 1
+        DecisionAction.HOLD -> 2
+        DecisionAction.DENY -> 3
+    }
 
 private fun FeatureValue.typeName(): String =
     when (this) {
@@ -208,4 +291,13 @@ private fun FeatureValue.typeName(): String =
         is FeatureValue.NumberValue -> "numeric"
         is FeatureValue.SetValue -> "set"
         is FeatureValue.TextValue -> "text"
+        is FeatureValue.Unavailable -> "unavailable"
+    }
+
+private fun RuleValue.typeName(): String =
+    when (this) {
+        is RuleValue.BooleanValue -> "boolean"
+        is RuleValue.NumberValue -> "numeric"
+        is RuleValue.SetValue -> "set"
+        is RuleValue.TextValue -> "text"
     }
