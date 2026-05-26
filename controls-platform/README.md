@@ -6,9 +6,10 @@ turning them into allow, challenge, hold, or deny decisions.
 The current staged platform contains the Gradle multi-module layout, pure core
 domain models, fraudgen event parsing, a provider-based feature resolver with
 request-scoped caching, pluggable scoring contracts, and a YAML rule DSL with
-typed evaluation. The local dependency stack includes Redpanda, DynamoDB Local,
-Redis, Prometheus, and Grafana, and avoids common host-port collisions by
-exposing DynamoDB on `18000` and Grafana on `13000`.
+typed evaluation, and decision orchestration. The local dependency stack
+includes Redpanda, DynamoDB Local, Redis, Prometheus, and Grafana, and avoids
+common host-port collisions by exposing DynamoDB on `18000` and Grafana on
+`13000`.
 
 ## Build
 

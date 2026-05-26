@@ -6,6 +6,9 @@ sealed interface FeatureValue {
             require(value.isFinite()) { "numeric feature value must be finite" }
         }
     }
+    data class ScoreValue(val result: ScoreResult) : FeatureValue {
+        val value: Double = result.score
+    }
     data class BooleanValue(val value: Boolean) : FeatureValue
     data class TextValue(val value: String) : FeatureValue
     data class SetValue(val values: Set<String>) : FeatureValue

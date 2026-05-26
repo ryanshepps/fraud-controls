@@ -163,6 +163,7 @@ class RuleEvaluator {
         when (featureValue) {
             is FeatureValue.BooleanValue -> expected == RuleValue.BooleanValue(featureValue.value)
             is FeatureValue.NumberValue -> expected == RuleValue.NumberValue(featureValue.value)
+            is FeatureValue.ScoreValue -> expected == RuleValue.NumberValue(featureValue.value)
             is FeatureValue.SetValue -> expected == RuleValue.SetValue(featureValue.values.map { RuleValue.TextValue(it) }.toSet())
             is FeatureValue.TextValue -> expected == RuleValue.TextValue(featureValue.value)
             is FeatureValue.Missing,
@@ -175,16 +176,18 @@ class RuleEvaluator {
         featureValue: FeatureValue,
         expected: RuleValue,
         predicate: (Double, Double) -> Boolean,
-    ): MatchResult =
-        when {
-            featureValue !is FeatureValue.NumberValue -> MatchResult.Invalid(
+    ): MatchResult {
+        val actual = featureValue.numericValue()
+        return when {
+            actual == null -> MatchResult.Invalid(
                 "feature $featureName expected numeric for comparison but was ${featureValue.typeName()}",
             )
             expected !is RuleValue.NumberValue -> MatchResult.Invalid(
                 "rule value for $featureName expected numeric for comparison but was ${expected.typeName()}",
             )
-            else -> MatchResult.Available(predicate(featureValue.value, expected.value))
+            else -> MatchResult.Available(predicate(actual, expected.value))
         }
+    }
 
     private fun inSet(
         featureName: String,
@@ -198,6 +201,7 @@ class RuleEvaluator {
                 when (featureValue) {
                     is FeatureValue.BooleanValue -> expected.values.contains(RuleValue.BooleanValue(featureValue.value))
                     is FeatureValue.NumberValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
+                    is FeatureValue.ScoreValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
                     is FeatureValue.SetValue -> featureValue.values.any { expected.values.contains(RuleValue.TextValue(it)) }
                     is FeatureValue.TextValue -> expected.values.contains(RuleValue.TextValue(featureValue.value))
                     is FeatureValue.Missing,
@@ -289,9 +293,22 @@ private fun FeatureValue.typeName(): String =
         is FeatureValue.BooleanValue -> "boolean"
         is FeatureValue.Missing -> "missing"
         is FeatureValue.NumberValue -> "numeric"
+        is FeatureValue.ScoreValue -> "numeric"
         is FeatureValue.SetValue -> "set"
         is FeatureValue.TextValue -> "text"
         is FeatureValue.Unavailable -> "unavailable"
+    }
+
+private fun FeatureValue.numericValue(): Double? =
+    when (this) {
+        is FeatureValue.NumberValue -> value
+        is FeatureValue.ScoreValue -> value
+        is FeatureValue.BooleanValue,
+        is FeatureValue.Missing,
+        is FeatureValue.SetValue,
+        is FeatureValue.TextValue,
+        is FeatureValue.Unavailable,
+        -> null
     }
 
 private fun RuleValue.typeName(): String =
