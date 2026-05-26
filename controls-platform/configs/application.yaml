@@ -4,7 +4,7 @@ service:
 
 kafka:
   bootstrapServers: localhost:19092
-  inputTopic: fraudgen.events
+  inputTopic: transactions
   decisionsTopic: controls.decisions
   ruleEvaluationsTopic: rule_evaluations
   shadowEvaluationsTopic: shadow_evaluations

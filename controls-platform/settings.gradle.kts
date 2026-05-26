@@ -24,5 +24,6 @@ include(
     ":modules:persistence",
     ":modules:streaming",
     ":modules:api",
+    ":modules:demo",
     ":modules:testing",
 )

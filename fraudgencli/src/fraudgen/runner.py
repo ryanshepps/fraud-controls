@@ -9,6 +9,7 @@ from typing import assert_never
 import numpy as np
 from numpy.random import Generator
 
+from fraudgen.models import TransactionEvent
 from fraudgen.population import Population
 from fraudgen.run_config import (
     CardTestingScenarioConfig,
@@ -41,7 +42,25 @@ class RunSummary:
     scenario_events: int
 
 
+@dataclass(frozen=True, slots=True)
+class RunArtifacts:
+    events: list[TransactionEvent]
+    labels: list[FraudLabel]
+    scenario_events: int
+
+
 def run_from_config(config: RunConfig) -> RunSummary:
+    artifacts = build_run_artifacts(config)
+    write_events_csv(artifacts.events, config.output.events_csv)
+    write_labels_csv(artifacts.labels, config.output.labels_csv)
+    return RunSummary(
+        total_events=len(artifacts.events),
+        total_labels=len(artifacts.labels),
+        scenario_events=artifacts.scenario_events,
+    )
+
+
+def build_run_artifacts(config: RunConfig) -> RunArtifacts:
     rng = np.random.default_rng(config.seed)
     population = Population.create(config.population_size, rng, config.start_time)
     baseline_config = SimulationConfig(
@@ -62,11 +81,9 @@ def run_from_config(config: RunConfig) -> RunSummary:
         key=lambda event: (event.timestamp, str(event.event_id)),
     )
 
-    write_events_csv(events, config.output.events_csv)
-    write_labels_csv(labels, config.output.labels_csv)
-    return RunSummary(
-        total_events=len(events),
-        total_labels=len(labels),
+    return RunArtifacts(
+        events=events,
+        labels=labels,
         scenario_events=len(scenario_events),
     )
 
