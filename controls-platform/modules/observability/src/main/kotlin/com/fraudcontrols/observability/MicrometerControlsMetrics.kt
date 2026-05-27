@@ -5,11 +5,14 @@ import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleActionType
 import com.fraudcontrols.rules.RuleMode
 import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.Clock
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.Timer
 import io.micrometer.prometheusmetrics.PrometheusConfig
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.tracer.common.SpanContext
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -18,6 +21,13 @@ class MicrometerControlsMetrics(
     val registry: PrometheusMeterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
 ) : ControlsMetrics {
     fun scrape(): String = registry.scrape()
+
+    fun scrape(acceptHeader: String?): String =
+        if (acceptHeader.isNullOrBlank()) {
+            registry.scrape()
+        } else {
+            registry.scrape(acceptHeader)
+        }
 
     override fun recordDecision(action: DecisionAction) {
         registry.counter("controls.decisions", "action", action.name).increment()
@@ -123,6 +133,18 @@ class MicrometerControlsMetrics(
     }
 
     private val gauges = ConcurrentHashMap<String, AtomicReference<Double>>()
+
+    companion object {
+        fun withSpanContext(spanContext: SpanContext): MicrometerControlsMetrics =
+            MicrometerControlsMetrics(
+                PrometheusMeterRegistry(
+                    PrometheusConfig.DEFAULT,
+                    PrometheusRegistry(),
+                    Clock.SYSTEM,
+                    spanContext,
+                ),
+            )
+    }
 }
 
 fun MeterRegistry.controlsMetricsScrapeOrNull(): String? =

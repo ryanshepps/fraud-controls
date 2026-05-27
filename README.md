@@ -29,7 +29,10 @@ Then open:
 
 - Admin API: `http://localhost:18080`
 - Grafana: `http://localhost:13000` (`admin` / `admin`)
+- Tempo: `http://localhost:3200`
 
 The compose stack starts Redpanda, DynamoDB Local, Redis, Prometheus, Grafana,
-the controls runtime, a deterministic scoring sidecar, and a live `fraudgen`
-feed into Kafka.
+Tempo, an OpenTelemetry collector, the controls runtime, a deterministic scoring
+sidecar, and a live `fraudgen` feed into Kafka. The Grafana p99 latency panel is
+backed by Prometheus exemplars, so sampled decision-latency points can link to
+the matching Tempo trace.

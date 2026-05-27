@@ -7,6 +7,7 @@ import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.core.ScoringContext
 import com.fraudcontrols.decisioning.DecisionEngine
 import com.fraudcontrols.decisioning.DecisionProcessor
+import com.fraudcontrols.decisioning.contracts.RuntimeContractVersions
 import com.fraudcontrols.features.FeatureResolver
 import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.features.defaultEventFeatureProviders
@@ -145,12 +146,15 @@ class RuntimePipelineIntegrationTest {
                     }.item().takeIf { it.isNotEmpty() }
                 }
                 assertEquals("HOLD", auditItem["action"]?.s())
-                assertEquals("2", auditItem["schema_version"]?.n())
+                assertEquals(RuntimeContractVersions.DECISION_AUDIT_ROW.toString(), auditItem["schema_version"]?.n())
                 assertEquals("0.1", auditItem["score"]?.n())
                 assertEquals("fixed-v1", auditItem["model_version"]?.s())
                 assertEquals(listOf("velocity_spike"), auditItem["reason_codes"]?.l()?.map { it.s() })
                 val auditRuleEvaluationJson = Json.parseToJsonElement(auditItem["rule_evaluation_json"]?.s().orEmpty()).jsonObject
-                assertEquals("2", auditRuleEvaluationJson["schema_version"]?.jsonPrimitive?.content)
+                assertEquals(
+                    RuntimeContractVersions.RULE_EVALUATION_EVENT.toString(),
+                    auditRuleEvaluationJson["schema_version"]?.jsonPrimitive?.content,
+                )
                 assertEquals("velocity-spike", auditRuleEvaluationJson["matches"]?.jsonArray?.single()?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
                 assertEquals("MATCHED", auditRuleEvaluationJson["evaluations"]?.jsonArray?.single()?.jsonObject?.get("condition_result")?.jsonPrimitive?.content)
                 assertEquals("velocity-spike", auditRuleEvaluationJson["conflict_resolution"]?.jsonObject?.get("selected")?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
@@ -165,7 +169,10 @@ class RuntimePipelineIntegrationTest {
 
                 val ruleEvaluationPayload = readKafkaValue(redpanda.bootstrapServers, ruleEvaluationsTopic, "evt-1")
                 val ruleEvaluationJson = Json.parseToJsonElement(ruleEvaluationPayload).jsonObject
-                assertEquals("2", ruleEvaluationJson["schema_version"]?.jsonPrimitive?.content)
+                assertEquals(
+                    RuntimeContractVersions.RULE_EVALUATION_EVENT.toString(),
+                    ruleEvaluationJson["schema_version"]?.jsonPrimitive?.content,
+                )
                 assertEquals("velocity-spike", ruleEvaluationJson["matches"]?.jsonArray?.single()?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
                 assertEquals("MATCHED", ruleEvaluationJson["evaluations"]?.jsonArray?.single()?.jsonObject?.get("condition_result")?.jsonPrimitive?.content)
             } finally {

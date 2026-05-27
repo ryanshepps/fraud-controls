@@ -4,7 +4,9 @@ import com.fraudcontrols.core.DecisionAction
 import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.rules.RuleActionType
 import com.fraudcontrols.rules.RuleMode
+import io.prometheus.metrics.tracer.common.SpanContext
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MicrometerControlsMetricsTest {
@@ -44,5 +46,33 @@ class MicrometerControlsMetricsTest {
         assertTrue(scrape.contains("controls_shadow_rule_would_have_blocked_rate{rule_id=\"high-score\"} 0.5"))
         assertTrue(scrape.contains("controls_scorer_score_divergence"))
         assertTrue(scrape.contains("controls_scorer_decision_flip_rate"))
+    }
+
+    @Test
+    fun `exports openmetrics exemplars with current trace context`() {
+        val spanContext = RecordingSpanContext()
+        val metrics = MicrometerControlsMetrics.withSpanContext(spanContext)
+
+        metrics.recordDecisionLatency(42.0)
+        val scrape = metrics.scrape("application/openmetrics-text; version=1.0.0")
+
+        assertTrue(scrape.contains("# EOF"))
+        assertTrue(scrape.contains("trace_id=\"0123456789abcdef0123456789abcdef\""))
+        assertTrue(scrape.contains("span_id=\"0123456789abcdef\""))
+        assertEquals(1, spanContext.markedCount)
+    }
+}
+
+private class RecordingSpanContext : SpanContext {
+    var markedCount = 0
+
+    override fun getCurrentTraceId(): String = "0123456789abcdef0123456789abcdef"
+
+    override fun getCurrentSpanId(): String = "0123456789abcdef"
+
+    override fun isCurrentSpanSampled(): Boolean = true
+
+    override fun markCurrentSpanAsExemplar() {
+        markedCount += 1
     }
 }

@@ -31,22 +31,46 @@ class DecisionEngine(
     private val featureResolver: FeatureResolver,
     private val ruleEvaluator: RuleEvaluator = RuleEvaluator(),
     private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
+    private val tracer: DecisioningTracer = NoopDecisioningTracer,
 ) {
     suspend fun decide(
         event: TransactionEvent,
         rules: List<RuleDefinition>,
         decidedAt: Instant,
-    ): DecisioningResult {
+    ): DecisioningResult = tracer.span(
+        name = "decision.evaluate",
+        attributes = mapOf(
+            "event.id" to event.eventId.value,
+            "decision.rule_count" to rules.size.toString(),
+        ),
+    ) {
         val context = ScoringContext(event)
+        val featureNames = rules.flatMap { it.condition.featureNames() }.toSet()
         val features = timed {
-            featureResolver.resolveRuleFeatures(
-                context = context,
-                featureNames = rules.flatMap { it.condition.featureNames() }.toSet(),
-            )
+            tracer.span(
+                name = "decision.feature.resolve",
+                attributes = mapOf(
+                    "event.id" to event.eventId.value,
+                    "feature.requested_count" to featureNames.size.toString(),
+                ),
+            ) {
+                featureResolver.resolveRuleFeatures(
+                    context = context,
+                    featureNames = featureNames,
+                )
+            }
         }.also { metrics.recordFeatureResolutionLatency(it.elapsedMs) }.value
         val score = features.scoreResult()
         val ruleEvaluation = timed {
-            ruleEvaluator.evaluate(features, rules)
+            tracer.span(
+                name = "decision.rule.evaluate",
+                attributes = mapOf(
+                    "event.id" to event.eventId.value,
+                    "decision.rule_count" to rules.size.toString(),
+                ),
+            ) {
+                ruleEvaluator.evaluate(features, rules)
+            }
         }.also {
             metrics.recordRuleEvaluationLatency(it.elapsedMs)
             metrics.recordRuleEvaluation(it.value)
@@ -62,7 +86,7 @@ class DecisionEngine(
             decidedAt = decidedAt,
         )
 
-        return DecisioningResult(
+        DecisioningResult(
             decision = decision,
             features = features,
             ruleEvaluation = ruleEvaluation,
@@ -82,6 +106,7 @@ class DecisionProcessor(
     private val decisionPublisher: DecisionPublisher = NoopDecisionPublisher,
     private val ruleEvaluationPublisher: RuleEvaluationPublisher = NoopRuleEvaluationPublisher,
     private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
+    private val tracer: DecisioningTracer = NoopDecisioningTracer,
     private val sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val logger: Logger = Logger.getLogger(DecisionProcessor::class.java.name),
 ) {
@@ -89,14 +114,20 @@ class DecisionProcessor(
         event: TransactionEvent,
         rules: List<RuleDefinition>,
         decidedAt: Instant,
-    ): DecisioningResult {
+    ): DecisioningResult = tracer.span(
+        name = "decision.process",
+        attributes = mapOf(
+            "event.id" to event.eventId.value,
+            "decision.rule_count" to rules.size.toString(),
+        ),
+    ) {
         val result = timed {
             engine.decide(event = event, rules = rules, decidedAt = decidedAt)
         }
         metrics.recordDecision(result.value.decision)
         metrics.recordDecisionLatency(result.elapsedMs)
         scheduleSideEffects(result.value)
-        return result.value
+        result.value
     }
 
     private fun scheduleSideEffects(result: DecisioningResult) {
