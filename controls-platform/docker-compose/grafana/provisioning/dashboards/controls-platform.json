@@ -105,10 +105,47 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(controls_decision_latency_seconds_count[1m])",
+          "legendFormat": "decision trace exemplars",
+          "refId": "A"
+        }
+      ],
+      "title": "Decision Trace Exemplars",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 14
       },
       "id": 3,
       "options": {
@@ -145,7 +182,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 14
       },
       "id": 4,
       "options": {
@@ -187,7 +224,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 22
       },
       "id": 5,
       "options": {
@@ -224,7 +261,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 22
       },
       "id": 6,
       "options": {
