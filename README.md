@@ -1,7 +1,13 @@
 # fraud-controls
 
-Repository for the fraud traffic generator and the controls platform that consumes
-its events.
+Fraud simulation and controls demo for synthetic peer-to-peer payments traffic.
+The repo pairs a Python traffic generator with a Kotlin controls platform that
+consumes transaction events, resolves features, computes a risk score used by
+rules, evaluates YAML controls, emits allow/challenge/hold/deny decisions, and
+stores an audit trail for later reconstruction.
+
+The point of the project is to explore the controls-engineering surface around a
+model: rollout safety, calibration, auditability, and operational visibility.
 
 ## Projects
 
@@ -10,30 +16,20 @@ its events.
 - [controls-platform](controls-platform/) - Kotlin fraud controls platform for
   parsing fraudgen events and producing allow, challenge, hold, or deny decisions.
 
-## Quick Start
+## Run The Demo
 
-Run the full local controls demo:
+Start the full local stack:
 
 ```bash
 cd controls-platform
 docker compose up --build
 ```
 
-Then open Grafana at `http://localhost:13000` or query the admin API at
-`http://localhost:18080`. The compose stack includes a `fraudgen-feed` container
-that runs the real `fraudgen` CLI continuously into Kafka.
+Then open:
 
-Run fraudgen manually from its project directory:
+- Admin API: `http://localhost:18080`
+- Grafana: `http://localhost:13000` (`admin` / `admin`)
 
-```bash
-cd fraudgencli
-uv run fraudgen run-config --config examples/stage3-run.yaml
-uv run fraudgen stream-config --config examples/controls-demo-stream.yaml --bootstrap-servers localhost:19092 --topic transactions --label-topic fraud_labels --loop --delay-ms 500
-```
-
-Run controls-platform tests from its project directory:
-
-```bash
-cd controls-platform
-mise exec -- ./gradlew test
-```
+The compose stack starts Redpanda, DynamoDB Local, Redis, Prometheus, Grafana,
+the controls runtime, a deterministic scoring sidecar, and a live `fraudgen`
+feed into Kafka.
