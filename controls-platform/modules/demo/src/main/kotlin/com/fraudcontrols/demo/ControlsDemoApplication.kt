@@ -1,6 +1,5 @@
 package com.fraudcontrols.demo
 
-import com.fraudcontrols.api.GlobalKillSwitchService
 import com.fraudcontrols.api.InMemoryDecisionRecordStore
 import com.fraudcontrols.api.KafkaRuleChangeAuditPublisher
 import com.fraudcontrols.api.RuleAdminService
@@ -163,9 +162,6 @@ fun main() {
         startAdminHttpServer(
             ruleAdminService = ruleAdminService,
             decisionRecords = decisionRecordStore,
-            globalKillSwitchService = GlobalKillSwitchService(
-                auditPublisher = KafkaRuleChangeAuditPublisher(producer, config.ruleChangesTopic),
-            ),
             host = config.httpHost,
             port = config.httpPort,
             metricsPath = config.metricsPath,
