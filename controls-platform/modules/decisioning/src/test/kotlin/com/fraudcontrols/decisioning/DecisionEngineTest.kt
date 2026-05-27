@@ -29,13 +29,22 @@ import com.fraudcontrols.scoring.Scorer
 import com.fraudcontrols.scoring.ScorerFeatureProvider
 import java.math.BigDecimal
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.coroutines.coroutineContext
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DecisionEngineTest {
     private val decidedAt = Instant.parse("2026-01-02T00:00:00Z")
 
@@ -166,7 +175,7 @@ class DecisionEngineTest {
     }
 
     @Test
-    fun `processor records audit and publishes evaluation then decision`() = runTest {
+    fun `processor records audit and publishes evaluations and decisions`() = runTest {
         val auditSink = RecordingAuditSink()
         val decisionPublisher = RecordingDecisionPublisher()
         val ruleEvaluationPublisher = RecordingRuleEvaluationPublisher()
@@ -175,6 +184,36 @@ class DecisionEngineTest {
             auditSink = auditSink,
             decisionPublisher = decisionPublisher,
             ruleEvaluationPublisher = ruleEvaluationPublisher,
+            sideEffectScope = CoroutineScope(coroutineContext),
+        )
+
+        val result = processor.process(
+            event = sampleEvent(amount = "1500.00"),
+            rules = listOf(largeAmountRule(action = RuleActionType.BLOCK, reasonCode = "large_amount")),
+            decidedAt = decidedAt,
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf(result.record), auditSink.records)
+        assertEquals(listOf(result.ruleEvaluation), ruleEvaluationPublisher.evaluations)
+        assertEquals(listOf(result.decision), decisionPublisher.decisions)
+        assertEquals(0.1, auditSink.records.single().score.score)
+        assertTrue(auditSink.records.single().features.values.containsKey(FraudFeatureNames.AMOUNT))
+    }
+
+    @Test
+    fun `processor returns decision before slow audit or kafka side effects complete`() = runTest {
+        val auditSink = BlockingAuditSink()
+        val decisionPublisher = BlockingDecisionPublisher()
+        val ruleEvaluationPublisher = BlockingRuleEvaluationPublisher()
+        val metrics = RecordingDecisioningMetrics()
+        val processor = DecisionProcessor(
+            engine = engine(score = sampleScore(0.1)),
+            auditSink = auditSink,
+            decisionPublisher = decisionPublisher,
+            ruleEvaluationPublisher = ruleEvaluationPublisher,
+            metrics = metrics,
+            sideEffectScope = CoroutineScope(coroutineContext),
         )
 
         val result = processor.process(
@@ -183,11 +222,59 @@ class DecisionEngineTest {
             decidedAt = decidedAt,
         )
 
+        assertEquals(DecisionAction.DENY, result.decision.action)
+        assertEquals(listOf(result.decision), metrics.decisions)
+        assertEquals(1, metrics.decisionLatencies.size)
+        assertEquals(emptyList(), auditSink.records)
+        assertEquals(emptyList(), decisionPublisher.decisions)
+        assertEquals(emptyList(), ruleEvaluationPublisher.evaluations)
+
+        runCurrent()
+        assertTrue(auditSink.started.isCompleted)
+        assertTrue(decisionPublisher.started.isCompleted)
+        assertTrue(ruleEvaluationPublisher.started.isCompleted)
+        assertFalse(auditSink.completed.isCompleted)
+        assertFalse(decisionPublisher.completed.isCompleted)
+        assertFalse(ruleEvaluationPublisher.completed.isCompleted)
+
+        auditSink.release.complete(Unit)
+        decisionPublisher.release.complete(Unit)
+        ruleEvaluationPublisher.release.complete(Unit)
+        advanceUntilIdle()
+
         assertEquals(listOf(result.record), auditSink.records)
-        assertEquals(listOf(result.ruleEvaluation), ruleEvaluationPublisher.evaluations)
         assertEquals(listOf(result.decision), decisionPublisher.decisions)
-        assertEquals(0.1, auditSink.records.single().score.score)
-        assertTrue(auditSink.records.single().features.values.containsKey(FraudFeatureNames.AMOUNT))
+        assertEquals(listOf(result.ruleEvaluation), ruleEvaluationPublisher.evaluations)
+    }
+
+    @Test
+    fun `processor counts side effect failures without changing returned decision`() = runTest {
+        val metrics = RecordingDecisioningMetrics()
+        val processor = DecisionProcessor(
+            engine = engine(score = sampleScore(0.1)),
+            auditSink = FailingAuditSink(),
+            decisionPublisher = FailingDecisionPublisher(),
+            ruleEvaluationPublisher = FailingRuleEvaluationPublisher(),
+            metrics = metrics,
+            sideEffectScope = CoroutineScope(coroutineContext),
+        )
+
+        val result = processor.process(
+            event = sampleEvent(amount = "1500.00"),
+            rules = listOf(largeAmountRule(action = RuleActionType.BLOCK, reasonCode = "large_amount")),
+            decidedAt = decidedAt,
+        )
+        advanceUntilIdle()
+
+        assertEquals(DecisionAction.DENY, result.decision.action)
+        assertEquals(
+            setOf(
+                DecisionSideEffect.AUDIT_RECORD,
+                DecisionSideEffect.RULE_EVALUATION_PUBLISH,
+                DecisionSideEffect.DECISION_PUBLISH,
+            ),
+            metrics.sideEffectFailures.toSet(),
+        )
     }
 
     @Test
@@ -281,11 +368,53 @@ private class RecordingAuditSink : DecisionAuditSink {
     }
 }
 
+private class BlockingAuditSink : DecisionAuditSink {
+    val started = CompletableDeferred<Unit>()
+    val completed = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    val records = mutableListOf<DecisionRecord>()
+
+    override suspend fun record(record: DecisionRecord) {
+        started.complete(Unit)
+        release.await()
+        delay(1)
+        records += record
+        completed.complete(Unit)
+    }
+}
+
+private class FailingAuditSink : DecisionAuditSink {
+    override suspend fun record(record: DecisionRecord) {
+        error("audit unavailable")
+    }
+}
+
 private class RecordingDecisionPublisher : DecisionPublisher {
     val decisions = mutableListOf<Decision>()
 
     override suspend fun publish(decision: Decision) {
         decisions += decision
+    }
+}
+
+private class BlockingDecisionPublisher : DecisionPublisher {
+    val started = CompletableDeferred<Unit>()
+    val completed = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    val decisions = mutableListOf<Decision>()
+
+    override suspend fun publish(decision: Decision) {
+        started.complete(Unit)
+        release.await()
+        delay(1)
+        decisions += decision
+        completed.complete(Unit)
+    }
+}
+
+private class FailingDecisionPublisher : DecisionPublisher {
+    override suspend fun publish(decision: Decision) {
+        error("decision publish unavailable")
     }
 }
 
@@ -295,4 +424,49 @@ private class RecordingRuleEvaluationPublisher : RuleEvaluationPublisher {
     override suspend fun publish(evaluation: RuleEvaluationResult) {
         evaluations += evaluation
     }
+}
+
+private class BlockingRuleEvaluationPublisher : RuleEvaluationPublisher {
+    val started = CompletableDeferred<Unit>()
+    val completed = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    val evaluations = mutableListOf<RuleEvaluationResult>()
+
+    override suspend fun publish(evaluation: RuleEvaluationResult) {
+        started.complete(Unit)
+        release.await()
+        delay(1)
+        evaluations += evaluation
+        completed.complete(Unit)
+    }
+}
+
+private class FailingRuleEvaluationPublisher : RuleEvaluationPublisher {
+    override suspend fun publish(evaluation: RuleEvaluationResult) {
+        error("rule evaluation publish unavailable")
+    }
+}
+
+private class RecordingDecisioningMetrics : DecisioningMetrics {
+    val decisions = mutableListOf<Decision>()
+    val decisionLatencies = mutableListOf<Double>()
+    val sideEffectFailures = mutableListOf<DecisionSideEffect>()
+
+    override fun recordDecision(decision: Decision) {
+        decisions += decision
+    }
+
+    override fun recordDecisionLatency(latencyMs: Double) {
+        decisionLatencies += latencyMs
+    }
+
+    override fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect) {
+        sideEffectFailures += sideEffect
+    }
+
+    override fun recordFeatureResolutionLatency(latencyMs: Double) = Unit
+
+    override fun recordRuleEvaluationLatency(latencyMs: Double) = Unit
+
+    override fun recordRuleEvaluation(evaluation: RuleEvaluationResult) = Unit
 }
