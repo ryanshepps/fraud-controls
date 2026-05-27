@@ -92,6 +92,13 @@ services:
       REDIS_PORT: "6379"
       SCORING_SIDECAR_URL: http://scoring-sidecar:50051/score
       HTTP_PORT: "8080"
+      OTEL_ENABLED: "true"
+      OTEL_SERVICE_NAME: controls-platform
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     depends_on:
       redpanda:
         condition: service_healthy
@@ -101,6 +108,8 @@ services:
         condition: service_healthy
       scoring-sidecar:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/metrics >/dev/null"]
       interval: 10s
@@ -135,6 +144,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --enable-feature=exemplar-storage
     ports:
       - "9090:9090"
     volumes:
@@ -145,6 +155,27 @@ services:
       timeout: 5s
       retries: 12
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./docker-compose/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.127.0
+    command:
+      - --config=/etc/otelcol/config.yml
+    volumes:
+      - ./docker-compose/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    depends_on:
+      tempo:
+        condition: service_started
+
   grafana:
     image: grafana/grafana:11.3.1
     ports:
@@ -153,7 +184,7 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
     volumes:
       - ./docker-compose/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:

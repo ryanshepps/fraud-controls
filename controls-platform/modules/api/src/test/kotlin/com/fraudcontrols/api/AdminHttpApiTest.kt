@@ -10,6 +10,7 @@ import com.fraudcontrols.features.defaultEventFeatureProviders
 import com.fraudcontrols.scoring.Scorer
 import com.fraudcontrols.scoring.ScorerFeatureProvider
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -162,6 +163,25 @@ class AdminHttpApiTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("controls_decisions_total 1.0\n", response.bodyAsText())
+    }
+
+    @Test
+    fun `metrics route forwards openmetrics accept header`() = testApplication {
+        application {
+            installControlsAdminRoutes(
+                ruleAdminService = RuleAdminService(),
+                decisionRecords = InMemoryDecisionRecordStore(),
+                metricsScrape = { accept -> "accept=$accept\n# EOF\n" },
+            )
+        }
+
+        val response = client.get("/metrics") {
+            header("Accept", "application/openmetrics-text; version=1.0.0")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("application/openmetrics-text"))
+        assertTrue(response.bodyAsText().contains("# EOF"))
     }
 
     @Test

@@ -8,6 +8,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.request.acceptItems
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -22,12 +23,18 @@ fun Application.installControlsAdminRoutes(
     ruleAdminService: RuleAdminService,
     decisionRecords: DecisionRecordReader,
     metricsPath: String = "/metrics",
-    metricsScrape: (() -> String)? = null,
+    metricsScrape: ((String?) -> String)? = null,
 ) {
     routing {
         if (metricsScrape != null) {
             get(metricsPath) {
-                call.respondText(metricsScrape(), ContentType.Text.Plain)
+                val acceptHeader = call.request.acceptItems().joinToString(",") { it.value }
+                val contentType = if (acceptHeader.contains("application/openmetrics-text")) {
+                    ContentType.parse("application/openmetrics-text; version=1.0.0; charset=utf-8")
+                } else {
+                    ContentType.Text.Plain
+                }
+                call.respondText(metricsScrape(acceptHeader), contentType)
             }
         }
 
@@ -142,7 +149,7 @@ fun startAdminHttpServer(
     host: String = "127.0.0.1",
     port: Int = 8080,
     metricsPath: String = "/metrics",
-    metricsScrape: (() -> String)? = null,
+    metricsScrape: ((String?) -> String)? = null,
 ) =
     embeddedServer(Netty, host = host, port = port) {
         installControlsAdminRoutes(

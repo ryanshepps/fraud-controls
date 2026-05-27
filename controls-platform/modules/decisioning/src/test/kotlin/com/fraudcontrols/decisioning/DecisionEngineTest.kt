@@ -278,6 +278,37 @@ class DecisionEngineTest {
     }
 
     @Test
+    fun `processor emits decision feature and rule tracing spans`() = runTest {
+        val tracer = RecordingDecisioningTracer()
+        val metrics = RecordingDecisioningMetrics()
+        val processor = DecisionProcessor(
+            engine = engine(score = sampleScore(0.1), tracer = tracer),
+            metrics = metrics,
+            tracer = tracer,
+            sideEffectScope = CoroutineScope(coroutineContext),
+        )
+
+        processor.process(
+            event = sampleEvent(amount = "1500.00"),
+            rules = listOf(largeAmountRule(action = RuleActionType.BLOCK, reasonCode = "large_amount")),
+            decidedAt = decidedAt,
+        )
+
+        assertEquals(
+            listOf(
+                "decision.process",
+                "decision.evaluate",
+                "decision.feature.resolve",
+                "decision.rule.evaluate",
+            ),
+            tracer.spans.map { it.name },
+        )
+        assertEquals("evt-1", tracer.spans.first().attributes["event.id"])
+        assertEquals("1", tracer.spans.first().attributes["decision.rule_count"])
+        assertEquals(1, metrics.decisionLatencies.size)
+    }
+
+    @Test
     fun `requires fraud model score from scorer feature provider`() = runTest {
         val engine = DecisionEngine(featureResolver = FeatureResolver(defaultEventFeatureProviders()))
 
@@ -293,9 +324,13 @@ class DecisionEngineTest {
         assertTrue(error.message.orEmpty().contains("no provider registered"))
     }
 
-    private fun engine(score: ScoreResult): DecisionEngine =
+    private fun engine(
+        score: ScoreResult,
+        tracer: DecisioningTracer = NoopDecisioningTracer,
+    ): DecisionEngine =
         DecisionEngine(
             featureResolver = FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(FixedScorer(score))),
+            tracer = tracer,
         )
 
     private fun sampleEvent(amount: String): TransactionEvent =
@@ -470,3 +505,21 @@ private class RecordingDecisioningMetrics : DecisioningMetrics {
 
     override fun recordRuleEvaluation(evaluation: RuleEvaluationResult) = Unit
 }
+
+private class RecordingDecisioningTracer : DecisioningTracer {
+    val spans = mutableListOf<RecordedSpan>()
+
+    override suspend fun <T> span(
+        name: String,
+        attributes: Map<String, String>,
+        block: suspend () -> T,
+    ): T {
+        spans += RecordedSpan(name = name, attributes = attributes)
+        return block()
+    }
+}
+
+private data class RecordedSpan(
+    val name: String,
+    val attributes: Map<String, String>,
+)

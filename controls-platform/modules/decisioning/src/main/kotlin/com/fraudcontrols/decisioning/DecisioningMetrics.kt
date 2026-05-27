@@ -31,6 +31,22 @@ data object NoopDecisioningMetrics : DecisioningMetrics {
     override fun recordRuleEvaluation(evaluation: RuleEvaluationResult) = Unit
 }
 
+interface DecisioningTracer {
+    suspend fun <T> span(
+        name: String,
+        attributes: Map<String, String> = emptyMap(),
+        block: suspend () -> T,
+    ): T
+}
+
+data object NoopDecisioningTracer : DecisioningTracer {
+    override suspend fun <T> span(
+        name: String,
+        attributes: Map<String, String>,
+        block: suspend () -> T,
+    ): T = block()
+}
+
 enum class DecisionSideEffect {
     AUDIT_RECORD,
     RULE_EVALUATION_PUBLISH,

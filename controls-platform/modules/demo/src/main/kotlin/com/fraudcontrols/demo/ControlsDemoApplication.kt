@@ -13,9 +13,11 @@ import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.features.defaultEventFeatureProviders
 import com.fraudcontrols.features.defaultVelocityFeatureProviders
 import com.fraudcontrols.observability.DecisioningMetricsAdapter
+import com.fraudcontrols.observability.ControlsTelemetryFactory
 import com.fraudcontrols.observability.KafkaShadowEvaluationReporterConsumer
 import com.fraudcontrols.observability.KafkaShadowEvaluationSink
 import com.fraudcontrols.observability.MicrometerControlsMetrics
+import com.fraudcontrols.observability.ObservedScorer
 import com.fraudcontrols.observability.ShadowEvaluationReporter
 import com.fraudcontrols.observability.kafkaShadowReporterConsumer
 import com.fraudcontrols.persistence.DynamoDecisionAuditReader
@@ -91,7 +93,8 @@ fun main() {
         val redisClient = JedisPooled(config.redisHost, config.redisPort)
         val velocityStore = RedisVelocityFeatureStore(redisClient)
         val producer = kafkaStringProducer(config.kafkaBootstrapServers)
-        val controlsMetrics = MicrometerControlsMetrics()
+        val controlsTelemetry = ControlsTelemetryFactory.fromEnvironment()
+        val controlsMetrics = MicrometerControlsMetrics.withSpanContext(controlsTelemetry.prometheusSpanContext)
         val metricsAdapter = DecisioningMetricsAdapter(controlsMetrics)
         val decisionAuditReader = DynamoDecisionAuditReader(dynamoClient, config.auditTable)
         val ruleAdminService = RuleAdminService(
@@ -111,7 +114,13 @@ fun main() {
             },
             shadowEvaluationSink = KafkaShadowEvaluationSink(producer, config.shadowEvaluationsTopic),
         )
-        val scorers = scorerFactory.build(runtime.scoring)
+        val scorers = scorerFactory.build(runtime.scoring).mapValues { (_, scorer) ->
+            ObservedScorer(
+                delegate = scorer,
+                metrics = controlsMetrics,
+                tracer = controlsTelemetry.decisioningTracer,
+            )
+        }
         val scoringFeatureProviders = runtime.scoring.features.map { binding ->
             if (binding.name != FraudFeatureNames.FRAUD_MODEL_SCORE) {
                 throw RuntimeConfigException("unsupported scoring feature binding: ${binding.name}")
@@ -122,6 +131,7 @@ fun main() {
             engine = DecisionEngine(
                 featureResolver = FeatureResolver(baseFeatureProviders + scoringFeatureProviders),
                 metrics = metricsAdapter,
+                tracer = controlsTelemetry.decisioningTracer,
             ),
             auditSink = FanOutDecisionAuditSink(
                 DynamoDecisionAuditSink(dynamoClient, config.auditTable),
@@ -129,6 +139,7 @@ fun main() {
             decisionPublisher = KafkaDecisionPublisher(producer, config.decisionsTopic),
             ruleEvaluationPublisher = KafkaRuleEvaluationPublisher(producer, config.ruleEvaluationsTopic),
             metrics = metricsAdapter,
+            tracer = controlsTelemetry.decisioningTracer,
         )
         val transactionConsumer = KafkaTransactionDecisionConsumer(
             consumer = kafkaStringConsumer(
