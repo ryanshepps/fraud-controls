@@ -14,30 +14,41 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 
-MODEL_VERSION = "deterministic-demo-v1"
+PRIMARY_MODEL_VERSION = "deterministic-demo-v1"
+CANDIDATE_MODEL_VERSION = "candidate-demo-v1"
 
 
 def score_transaction(payload: dict[str, Any]) -> dict[str, Any]:
+    model_id = str(payload.get("model_id") or PRIMARY_MODEL_VERSION)
     amount = _number(payload.get("amount"))
     sender_age_days = _number(payload.get("sender_account_age_days"), default=30.0)
     is_new_counterparty = bool(payload.get("is_new_counterparty", False))
 
-    raw_score = -2.0
-    raw_score += min(amount / 250.0, 3.0) * 0.9
-    raw_score += 1.0 if is_new_counterparty else 0.0
-    raw_score += 0.8 if sender_age_days < 1.0 else 0.0
+    if model_id == CANDIDATE_MODEL_VERSION:
+        raw_score = -1.5
+        raw_score += min(amount / 150.0, 3.0)
+        raw_score += 1.1 if is_new_counterparty else 0.0
+        raw_score += 1.0 if sender_age_days < 2.0 else 0.0
+        shap_values = {"candidate_demo_score": _sigmoid(raw_score)}
+    else:
+        model_id = PRIMARY_MODEL_VERSION
+        raw_score = -2.0
+        raw_score += min(amount / 250.0, 3.0) * 0.9
+        raw_score += 1.0 if is_new_counterparty else 0.0
+        raw_score += 0.8 if sender_age_days < 1.0 else 0.0
+        shap_values = {
+            "amount": round(min(amount / 250.0, 3.0) * 0.9, 6),
+            "is_new_counterparty": 1.0 if is_new_counterparty else 0.0,
+            "sender_account_age_days": 0.8 if sender_age_days < 1.0 else 0.0,
+        }
     calibrated_score = 1.0 / (1.0 + math.exp(-raw_score))
 
     return {
         "mode": "deterministic_demo",
-        "model_version": MODEL_VERSION,
+        "model_version": model_id,
         "raw_score": round(raw_score, 6),
         "calibrated_score": round(calibrated_score, 6),
-        "shap_values": {
-            "amount": round(min(amount / 250.0, 3.0) * 0.9, 6),
-            "is_new_counterparty": 1.0 if is_new_counterparty else 0.0,
-            "sender_account_age_days": 0.8 if sender_age_days < 1.0 else 0.0,
-        },
+        "shap_values": shap_values,
     }
 
 
@@ -86,6 +97,10 @@ def _number(value: Any, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
     return result if math.isfinite(result) else default
+
+
+def _sigmoid(raw_score: float) -> float:
+    return 1.0 / (1.0 + math.exp(-raw_score))
 
 
 def main() -> None:

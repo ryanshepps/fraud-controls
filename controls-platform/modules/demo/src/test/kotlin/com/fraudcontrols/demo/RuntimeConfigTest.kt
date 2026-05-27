@@ -26,6 +26,9 @@ class RuntimeConfigTest {
             bundle.initialRules.map { it.id }.toSet(),
         )
         assertEquals(setOf("configs/heuristic.yaml"), bundle.ruleBasedConfigsByPath.keys)
+        val shadowScorer = bundle.scoring.scorers.single { it.name == "shadow_wrapped_xgb" }
+        assertEquals("demo_sidecar", shadowScorer.primary)
+        assertEquals(listOf("demo_candidate"), shadowScorer.shadows)
     }
 
     @Test
@@ -46,8 +49,8 @@ class RuntimeConfigTest {
         assertEquals(19090, bundle.application.httpPort)
         assertEquals(listOf("demo-score-shadow"), bundle.initialRules.map { it.id })
         assertEquals(setOf("heuristic.yaml"), bundle.ruleBasedConfigsByPath.keys)
-        val xgboostScorer = bundle.scoring.scorers.single { it.name == "xgboost_v1" }
-        assertEquals("http://scoring-sidecar:50051/score", xgboostScorer.sidecarAddress)
+        val sidecarScorer = bundle.scoring.scorers.single { it.name == "demo_sidecar" }
+        assertEquals("http://scoring-sidecar:50051/score", sidecarScorer.sidecarAddress)
     }
 
     @Test
@@ -187,13 +190,13 @@ class RuntimeConfigTest {
           scorers:
             - name: primary_scorer
               type: failover
-              primary: xgboost_v1
+              primary: demo_sidecar
               fallback: heuristic
               timeout_ms: 30
-            - name: xgboost_v1
+            - name: demo_sidecar
               type: xgboost
               sidecar_address: http://localhost:50051/score
-              model_id: fraud_xgb_v1
+              model_id: deterministic-demo-v1
             - name: heuristic
               type: rule_based
               config_path: heuristic.yaml

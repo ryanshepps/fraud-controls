@@ -14,18 +14,18 @@ scoring:
 
     - name: shadow_wrapped_xgb
       type: shadow
-      primary: xgboost_v1
-      shadows: [xgboost_v2_candidate]
+      primary: demo_sidecar
+      shadows: [demo_candidate]
 
-    - name: xgboost_v1
+    - name: demo_sidecar
       type: xgboost
       sidecar_address: "http://scoring-sidecar:50051/score"
-      model_id: "fraud_xgb_v1"
+      model_id: "deterministic-demo-v1"
 
-    - name: xgboost_v2_candidate
+    - name: demo_candidate
       type: xgboost
       sidecar_address: "http://scoring-sidecar:50051/score"
-      model_id: "fraud_xgb_v2"
+      model_id: "candidate-demo-v1"
 
     - name: heuristic
       type: rule_based
