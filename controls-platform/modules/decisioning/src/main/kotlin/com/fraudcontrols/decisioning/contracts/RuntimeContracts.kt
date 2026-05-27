@@ -26,8 +26,8 @@ import kotlinx.serialization.json.put
 
 object RuntimeContractVersions {
     const val DECISION_EVENT = 1
-    const val RULE_EVALUATION_EVENT = 2
-    const val DECISION_AUDIT_ROW = 2
+    const val RULE_EVALUATION_EVENT = 1
+    const val DECISION_AUDIT_ROW = 1
 }
 
 data class DecisionAuditRowContract(

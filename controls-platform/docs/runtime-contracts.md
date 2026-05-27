@@ -44,11 +44,11 @@ Required fields: `schema_version`, `event_id`, `action`, `reason_codes`,
 
 ## Kafka `rule_evaluations` Payload
 
-Current `schema_version`: `2`
+Current `schema_version`: `1`
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "event_id": "evt-1",
   "matches": [
     {
@@ -212,7 +212,7 @@ requires `scorer_name`, `scorer_version`, `role`, and exactly one of `score` or
 
 ## DynamoDB Decision Audit Row
 
-Current `schema_version`: `2`
+Current `schema_version`: `1`
 
 Partition key: `event_id`
 

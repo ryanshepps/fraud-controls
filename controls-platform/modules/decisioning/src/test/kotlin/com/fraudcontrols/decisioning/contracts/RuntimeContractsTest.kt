@@ -64,7 +64,7 @@ class RuntimeContractsTest {
     fun `rule evaluation event contract is versioned with full match diagnostics`() {
         val json = sampleRuleEvaluation().toRuleEvaluationEventJsonObject()
 
-        assertEquals("2", json["schema_version"]?.jsonPrimitive?.content)
+        assertEquals("1", json["schema_version"]?.jsonPrimitive?.content)
         assertEquals("evt-1", json["event_id"]?.jsonPrimitive?.content)
         val match = json["matches"]?.jsonArray?.single()?.jsonObject ?: error("match missing")
         assertEquals("velocity-spike", match["rule_id"]?.jsonPrimitive?.content)

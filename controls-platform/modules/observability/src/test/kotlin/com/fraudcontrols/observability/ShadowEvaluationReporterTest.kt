@@ -80,7 +80,7 @@ class ShadowEvaluationReporterTest {
         val rulePayload =
             """
             {
-              "schema_version": 2,
+              "schema_version": 1,
               "event_id": "evt-1",
               "matches": [
                 {
