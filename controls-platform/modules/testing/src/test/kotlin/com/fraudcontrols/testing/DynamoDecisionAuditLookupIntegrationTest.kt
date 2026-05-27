@@ -1,6 +1,5 @@
 package com.fraudcontrols.testing
 
-import com.fraudcontrols.api.GlobalKillSwitchService
 import com.fraudcontrols.api.GrpcDecisionService
 import com.fraudcontrols.api.RuleAdminService
 import com.fraudcontrols.api.installControlsAdminRoutes
@@ -91,7 +90,6 @@ class DynamoDecisionAuditLookupIntegrationTest {
                     installControlsAdminRoutes(
                         ruleAdminService = RuleAdminService(),
                         decisionRecords = auditReader,
-                        globalKillSwitchService = GlobalKillSwitchService(),
                     )
                 }
 

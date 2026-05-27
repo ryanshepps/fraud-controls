@@ -21,7 +21,6 @@ import kotlinx.serialization.json.put
 fun Application.installControlsAdminRoutes(
     ruleAdminService: RuleAdminService,
     decisionRecords: DecisionRecordReader,
-    globalKillSwitchService: GlobalKillSwitchService,
     metricsScrape: (() -> String)? = null,
 ) {
     routing {
@@ -127,22 +126,6 @@ fun Application.installControlsAdminRoutes(
             }
         }
 
-        post("/admin/global-kill") {
-            val body = call.receiveText()
-            try {
-                val mode = globalKillSwitchService.set(
-                    nextMode = parseGlobalKillSwitchMode(body),
-                    actor = parseActor(body),
-                )
-                call.respondJson(
-                    buildJsonObject {
-                        put("mode", mode.wireName)
-                    }.toString(),
-                )
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
-        }
     }
 }
 
@@ -155,7 +138,6 @@ internal fun parseDecisionLookupEventId(rawEventId: String): String {
 fun startAdminHttpServer(
     ruleAdminService: RuleAdminService,
     decisionRecords: DecisionRecordReader,
-    globalKillSwitchService: GlobalKillSwitchService,
     host: String = "127.0.0.1",
     port: Int = 8080,
     metricsScrape: (() -> String)? = null,
@@ -164,7 +146,6 @@ fun startAdminHttpServer(
         installControlsAdminRoutes(
             ruleAdminService = ruleAdminService,
             decisionRecords = decisionRecords,
-            globalKillSwitchService = globalKillSwitchService,
             metricsScrape = metricsScrape,
         )
     }.start(wait = false)
