@@ -2,12 +2,14 @@ package com.fraudcontrols.decisioning
 
 import com.fraudcontrols.core.Decision
 import com.fraudcontrols.core.DecisionAction
+import com.fraudcontrols.core.EventId
 import com.fraudcontrols.core.FeatureSnapshot
 import com.fraudcontrols.core.FeatureValue
 import com.fraudcontrols.core.ReasonCode
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.core.ScoringContext
 import com.fraudcontrols.core.TransactionEvent
+import com.fraudcontrols.decisioning.contracts.DecisionAuditRowContract
 import com.fraudcontrols.features.FeatureResolver
 import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.rules.ResolvedRuleAction
@@ -93,6 +95,10 @@ class DecisionProcessor(
 
 interface DecisionAuditSink {
     suspend fun record(record: DecisionRecord)
+}
+
+interface DecisionRecordReader {
+    suspend fun find(eventId: EventId): DecisionAuditRowContract?
 }
 
 interface DecisionPublisher {

@@ -3,12 +3,11 @@ package com.fraudcontrols.api
 import com.fraudcontrols.core.EventId
 import com.fraudcontrols.decisioning.DecisionAuditSink
 import com.fraudcontrols.decisioning.DecisionRecord
+import com.fraudcontrols.decisioning.DecisionRecordReader
+import com.fraudcontrols.decisioning.contracts.DecisionAuditRowContract
+import com.fraudcontrols.decisioning.contracts.toDecisionAuditRowContract
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-interface DecisionRecordReader {
-    suspend fun find(eventId: EventId): DecisionRecord?
-}
 
 class InMemoryDecisionRecordStore(
     initialRecords: Iterable<DecisionRecord> = emptyList(),
@@ -29,8 +28,8 @@ class InMemoryDecisionRecordStore(
         }
     }
 
-    override suspend fun find(eventId: EventId): DecisionRecord? =
+    override suspend fun find(eventId: EventId): DecisionAuditRowContract? =
         mutex.withLock {
-            records[eventId]
+            records[eventId]?.toDecisionAuditRowContract()
         }
 }
