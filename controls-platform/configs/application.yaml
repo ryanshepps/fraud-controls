@@ -1,6 +1,12 @@
 service:
   name: controls-platform
   environment: local
+  httpHost: 0.0.0.0
+  httpPort: 8080
+
+configs:
+  scoring: scoring.yaml
+  rulesDirectory: rules
 
 kafka:
   bootstrapServers: localhost:19092
@@ -9,6 +15,7 @@ kafka:
   ruleEvaluationsTopic: rule_evaluations
   shadowEvaluationsTopic: shadow_evaluations
   ruleChangesTopic: rule_changes
+  fraudLabelsTopic: fraud_labels
 
 dynamodb:
   endpoint: http://localhost:18000
@@ -18,5 +25,4 @@ redis:
   endpoint: redis://localhost:6379
 
 observability:
-  prometheusPort: 9090
   metricsPath: /metrics

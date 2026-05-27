@@ -1,2 +1,51 @@
 version: 1
-rules: []
+rules:
+  - id: demo-new-account-cashout
+    version: 1
+    description: Block larger sends from very new accounts to new counterparties.
+    enabled: true
+    mode: enforce
+    priority: 200
+    when:
+      all:
+        - feature: amount
+          op: gte
+          value: 100.0
+        - feature: sender_account_age_days
+          op: lte
+          value: 1.0
+        - feature: is_new_counterparty
+          op: eq
+          value: true
+    action:
+      type: block
+      reason_code: demo_new_account_cashout
+
+  - id: demo-velocity-review
+    version: 1
+    description: Hold senders with repeated sends in the last five minutes.
+    enabled: true
+    mode: enforce
+    priority: 100
+    when:
+      feature: sender_send_count_5m
+      op: gte
+      value: 4.0
+    action:
+      type: review_queue
+      reason_code: demo_velocity_review
+      queue: trust_safety_l2
+
+  - id: demo-score-shadow
+    version: 1
+    description: Shadow-only score threshold for promote/disable demos.
+    enabled: true
+    mode: shadow
+    priority: 150
+    when:
+      feature: fraud_model_score
+      op: gte
+      value: 0.55
+    action:
+      type: block
+      reason_code: demo_score_shadow

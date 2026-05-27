@@ -20,11 +20,12 @@ import kotlinx.serialization.json.put
 fun Application.installControlsAdminRoutes(
     ruleAdminService: RuleAdminService,
     decisionRecords: DecisionRecordReader,
+    metricsPath: String = "/metrics",
     metricsScrape: (() -> String)? = null,
 ) {
     routing {
         if (metricsScrape != null) {
-            get("/metrics") {
+            get(metricsPath) {
                 call.respondText(metricsScrape(), ContentType.Text.Plain)
             }
         }
@@ -128,12 +129,14 @@ fun startAdminHttpServer(
     decisionRecords: DecisionRecordReader,
     host: String = "127.0.0.1",
     port: Int = 8080,
+    metricsPath: String = "/metrics",
     metricsScrape: (() -> String)? = null,
 ) =
     embeddedServer(Netty, host = host, port = port) {
         installControlsAdminRoutes(
             ruleAdminService = ruleAdminService,
             decisionRecords = decisionRecords,
+            metricsPath = metricsPath,
             metricsScrape = metricsScrape,
         )
     }.start(wait = false)

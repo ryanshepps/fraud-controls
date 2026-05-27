@@ -48,6 +48,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=build /workspace/modules/demo/build/install/demo ./
+COPY --from=build /workspace/configs ./configs
 
 EXPOSE 8080
 
