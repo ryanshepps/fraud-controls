@@ -57,6 +57,12 @@ Current `schema_version`: `1`
       "mode": "ENFORCE",
       "priority": 100,
       "action_type": "REVIEW_QUEUE",
+      "action": {
+        "type": "REVIEW_QUEUE",
+        "reason_code": "velocity_spike",
+        "reversible": true,
+        "queue": "trust_safety_l2"
+      },
       "reason_code": "velocity_spike"
     }
   ],
@@ -67,18 +73,103 @@ Current `schema_version`: `1`
       "reason": "unknown_feature unavailable"
     }
   ],
+  "evaluations": [
+    {
+      "rule_id": "velocity-spike",
+      "rule_version": 1,
+      "mode": "ENFORCE",
+      "priority": 100,
+      "condition_result": "MATCHED",
+      "action": {
+        "type": "REVIEW_QUEUE",
+        "reason_code": "velocity_spike",
+        "reversible": true,
+        "queue": "trust_safety_l2"
+      },
+      "feature_values": {
+        "fraud_model_score": {
+          "type": "number",
+          "value": 0.91
+        }
+      }
+    },
+    {
+      "rule_id": "missing-feature",
+      "rule_version": 1,
+      "mode": "ENFORCE",
+      "priority": 50,
+      "condition_result": "UNAVAILABLE",
+      "skipped_reason": "unknown_feature unavailable",
+      "action": {
+        "type": "CHALLENGE",
+        "reversible": false
+      },
+      "feature_values": {
+        "unknown_feature": {
+          "type": "unavailable",
+          "value": "feature store timeout"
+        }
+      }
+    }
+  ],
+  "conflict_resolution": {
+    "strategy": "enforce_matches_by_priority_desc_severity_desc_rule_id_asc",
+    "candidates": [
+      {
+        "rule_id": "velocity-spike",
+        "rule_version": 1,
+        "decision_action": "HOLD",
+        "priority": 100,
+        "action_type": "REVIEW_QUEUE",
+        "action": {
+          "type": "REVIEW_QUEUE",
+          "reason_code": "velocity_spike",
+          "reversible": true,
+          "queue": "trust_safety_l2"
+        },
+        "reason_code": "velocity_spike"
+      }
+    ],
+    "selected": {
+      "rule_id": "velocity-spike",
+      "rule_version": 1,
+      "decision_action": "HOLD",
+      "priority": 100,
+      "action_type": "REVIEW_QUEUE",
+      "action": {
+        "type": "REVIEW_QUEUE",
+        "reason_code": "velocity_spike",
+        "reversible": true,
+        "queue": "trust_safety_l2"
+      },
+      "reason_code": "velocity_spike"
+    }
+  },
   "resolved_action": {
     "rule_id": "velocity-spike",
     "rule_version": 1,
     "decision_action": "HOLD",
     "priority": 100,
     "action_type": "REVIEW_QUEUE",
+    "action": {
+      "type": "REVIEW_QUEUE",
+      "reason_code": "velocity_spike",
+      "reversible": true,
+      "queue": "trust_safety_l2"
+    },
     "reason_code": "velocity_spike"
   }
 }
 ```
 
-Required fields: `schema_version`, `event_id`, `matches`, `skipped`.
+Required fields: `schema_version`, `event_id`, `matches`, `skipped`,
+`evaluations`, `conflict_resolution`.
+`evaluations` contains every rule considered by the evaluator, including
+matched, not matched, disabled, and unavailable rules. Each entry records the
+immutable rule version, effective mode, priority, condition result, action
+metadata, feature values referenced by that rule, and skipped reason when
+applicable. `conflict_resolution` records the deterministic candidate ordering
+used to choose the final enforce action.
 `resolved_action` is present only when an enforce rule wins action resolution.
 
 ## Kafka `shadow_evaluations` Payload
@@ -137,7 +228,7 @@ Partition key: `event_id`
 | `score_json` | S | yes | Full score object, including raw score, factors, latency, and degraded flag. |
 | `rule_evaluation_ids` | L<S> | yes | Rule ids that matched during evaluation. |
 | `features_json` | S | yes | Feature snapshot JSON keyed by feature name. |
-| `rule_evaluation_json` | S | yes | Full versioned `rule_evaluations` payload for reconstruction. |
+| `rule_evaluation_json` | S | yes | Full versioned `rule_evaluations` payload, including per-rule outcomes, feature values, action metadata, and conflict-resolution inputs. |
 
 The audit row is intentionally denormalized. Top-level attributes support common
 lookup and filtering. Embedded JSON preserves the complete decision context so a

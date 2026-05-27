@@ -3,12 +3,14 @@ package com.fraudcontrols.observability
 import com.fraudcontrols.core.DecisionAction
 import com.fraudcontrols.core.EventId
 import com.fraudcontrols.core.Factor
+import com.fraudcontrols.core.FeatureValue
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.rules.ResolvedRuleAction
 import com.fraudcontrols.rules.RuleAction
 import com.fraudcontrols.rules.RuleActionType
+import com.fraudcontrols.rules.RuleEvaluationConditionResult
+import com.fraudcontrols.rules.RuleEvaluationDetail
 import com.fraudcontrols.rules.RuleEvaluationResult
-import com.fraudcontrols.rules.RuleMatch
 import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.scoring.ShadowEvaluation
 import com.fraudcontrols.scoring.ShadowScorerRole
@@ -30,16 +32,17 @@ class ShadowEvaluationReporterTest {
         reporter.recordRuleEvaluation(
             RuleEvaluationResult(
                 eventId = EventId("evt-1"),
-                matches = listOf(
-                    RuleMatch(
+                evaluations = listOf(
+                    RuleEvaluationDetail(
                         ruleId = "shadow-high-score",
                         ruleVersion = 1,
                         mode = RuleMode.SHADOW,
                         priority = 100,
+                        conditionResult = RuleEvaluationConditionResult.MATCHED,
                         action = RuleAction(type = RuleActionType.BLOCK),
+                        featureValues = mapOf("fraud_model_score" to FeatureValue.NumberValue(0.9)),
                     ),
                 ),
-                skipped = emptyList(),
                 resolvedAction = ResolvedRuleAction(
                     ruleId = "enforce-high-score",
                     ruleVersion = 1,
@@ -52,8 +55,7 @@ class ShadowEvaluationReporterTest {
         reporter.recordRuleEvaluation(
             RuleEvaluationResult(
                 eventId = EventId("evt-2"),
-                matches = emptyList(),
-                skipped = emptyList(),
+                evaluations = emptyList(),
                 resolvedAction = null,
             ),
         )

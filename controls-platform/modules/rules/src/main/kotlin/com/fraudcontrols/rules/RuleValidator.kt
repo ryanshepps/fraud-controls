@@ -24,11 +24,3 @@ class RuleValidator(
 }
 
 class RuleValidationException(message: String) : IllegalArgumentException(message)
-
-fun RuleCondition.featureNames(): Set<String> =
-    when (this) {
-        is RuleCondition.All -> conditions.flatMap { it.featureNames() }.toSet()
-        is RuleCondition.Any -> conditions.flatMap { it.featureNames() }.toSet()
-        is RuleCondition.Comparison -> setOf(featureName)
-        is RuleCondition.Not -> condition.featureNames()
-    }

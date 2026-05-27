@@ -18,8 +18,9 @@ import com.fraudcontrols.decisioning.DecisionRecord
 import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.rules.RuleAction
 import com.fraudcontrols.rules.RuleActionType
+import com.fraudcontrols.rules.RuleEvaluationConditionResult
+import com.fraudcontrols.rules.RuleEvaluationDetail
 import com.fraudcontrols.rules.RuleEvaluationResult
-import com.fraudcontrols.rules.RuleMatch
 import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.rules.ResolvedRuleAction
 import java.math.BigDecimal
@@ -72,6 +73,42 @@ class RuntimeContractsTest {
         assertEquals("REVIEW_QUEUE", match["action_type"]?.jsonPrimitive?.content)
         val resolved = json["resolved_action"]?.jsonObject ?: error("resolved action missing")
         assertEquals("HOLD", resolved["decision_action"]?.jsonPrimitive?.content)
+        val evaluations = json["evaluations"]?.jsonArray ?: error("evaluations missing")
+        assertEquals(4, evaluations.size)
+        val nonMatch = evaluations[1].jsonObject
+        assertEquals("low-amount-allow", nonMatch["rule_id"]?.jsonPrimitive?.content)
+        assertEquals("NOT_MATCHED", nonMatch["condition_result"]?.jsonPrimitive?.content)
+        assertEquals("ALLOW", nonMatch["action"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        val unavailable = evaluations[2].jsonObject
+        assertEquals("UNAVAILABLE", unavailable["condition_result"]?.jsonPrimitive?.content)
+        assertEquals(
+            "feature fraud_model_score unavailable: redis timeout",
+            unavailable["skipped_reason"]?.jsonPrimitive?.content,
+        )
+        assertEquals(
+            "redis timeout",
+            unavailable["feature_values"]
+                ?.jsonObject
+                ?.get(FraudFeatureNames.FRAUD_MODEL_SCORE)
+                ?.jsonObject
+                ?.get("value")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals("DISABLED", evaluations[3].jsonObject["condition_result"]?.jsonPrimitive?.content)
+        val conflictResolution = json["conflict_resolution"]?.jsonObject ?: error("conflict resolution missing")
+        assertEquals(
+            "enforce_matches_by_priority_desc_severity_desc_rule_id_asc",
+            conflictResolution["strategy"]?.jsonPrimitive?.content,
+        )
+        assertEquals(
+            "velocity-spike",
+            conflictResolution["selected"]?.jsonObject?.get("rule_id")?.jsonPrimitive?.content,
+        )
+        assertEquals(
+            listOf("velocity-spike"),
+            conflictResolution["candidates"]?.jsonArray?.map { it.jsonObject["rule_id"]?.jsonPrimitive?.content },
+        )
     }
 
     @Test
@@ -104,6 +141,19 @@ class RuntimeContractsTest {
         assertEquals("number", features["values"]?.jsonObject?.get(FraudFeatureNames.AMOUNT)?.jsonObject?.get("type")?.jsonPrimitive?.content)
         val ruleEvaluation = parseRuleEvaluationEventContract(row.ruleEvaluationJson)
         assertEquals("velocity-spike", ruleEvaluation["matches"]?.jsonArray?.single()?.jsonObject?.get("rule_id")?.jsonPrimitive?.content)
+        assertEquals(4, ruleEvaluation["evaluations"]?.jsonArray?.size)
+        assertEquals(
+            "trust_safety_l2",
+            ruleEvaluation["evaluations"]
+                ?.jsonArray
+                ?.first()
+                ?.jsonObject
+                ?.get("action")
+                ?.jsonObject
+                ?.get("queue")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     private fun sampleRecord(): DecisionRecord =
@@ -130,35 +180,78 @@ class RuntimeContractsTest {
             decidedAt = Instant.parse("2026-01-01T12:00:05Z"),
         )
 
-    private fun sampleRuleEvaluation(): RuleEvaluationResult =
-        RuleEvaluationResult(
+    private fun sampleRuleEvaluation(): RuleEvaluationResult {
+        val reviewAction = RuleAction(
+            type = RuleActionType.REVIEW_QUEUE,
+            reasonCode = ReasonCode("velocity_spike"),
+            reversible = true,
+            queue = "trust_safety_l2",
+        )
+        val allowAction = RuleAction(type = RuleActionType.ALLOW)
+        val challengeAction = RuleAction(
+            type = RuleActionType.CHALLENGE,
+            reasonCode = ReasonCode("MODEL_UNAVAILABLE"),
+        )
+        return RuleEvaluationResult(
             eventId = EventId("evt-1"),
-            matches = listOf(
-                RuleMatch(
+            evaluations = listOf(
+                RuleEvaluationDetail(
                     ruleId = "velocity-spike",
                     ruleVersion = 1,
                     mode = RuleMode.ENFORCE,
                     priority = 100,
-                    action = RuleAction(
-                        type = RuleActionType.REVIEW_QUEUE,
-                        reasonCode = ReasonCode("velocity_spike"),
-                        queue = "trust_safety_l2",
+                    conditionResult = RuleEvaluationConditionResult.MATCHED,
+                    action = reviewAction,
+                    featureValues = linkedMapOf(
+                        FraudFeatureNames.AMOUNT to FeatureValue.NumberValue(25.50),
+                        FraudFeatureNames.FRAUD_MODEL_SCORE to FeatureValue.ScoreValue(sampleScore()),
                     ),
                 ),
+                RuleEvaluationDetail(
+                    ruleId = "low-amount-allow",
+                    ruleVersion = 2,
+                    mode = RuleMode.ENFORCE,
+                    priority = 200,
+                    conditionResult = RuleEvaluationConditionResult.NOT_MATCHED,
+                    action = allowAction,
+                    featureValues = linkedMapOf(
+                        FraudFeatureNames.AMOUNT to FeatureValue.NumberValue(25.50),
+                    ),
+                ),
+                RuleEvaluationDetail(
+                    ruleId = "model-unavailable",
+                    ruleVersion = 3,
+                    mode = RuleMode.ENFORCE,
+                    priority = 150,
+                    conditionResult = RuleEvaluationConditionResult.UNAVAILABLE,
+                    action = challengeAction,
+                    featureValues = linkedMapOf(
+                        FraudFeatureNames.FRAUD_MODEL_SCORE to FeatureValue.Unavailable("redis timeout"),
+                    ),
+                    skippedReason = "feature fraud_model_score unavailable: redis timeout",
+                ),
+                RuleEvaluationDetail(
+                    ruleId = "disabled-shadow-rule",
+                    ruleVersion = 4,
+                    mode = RuleMode.DISABLED,
+                    priority = 50,
+                    conditionResult = RuleEvaluationConditionResult.DISABLED,
+                    action = RuleAction(type = RuleActionType.TAG, tag = "disabled"),
+                    featureValues = linkedMapOf(
+                        FraudFeatureNames.AMOUNT to FeatureValue.NumberValue(25.50),
+                    ),
+                    skippedReason = "rule is disabled",
+                ),
             ),
-            skipped = emptyList(),
             resolvedAction = ResolvedRuleAction(
                 ruleId = "velocity-spike",
                 ruleVersion = 1,
                 decisionAction = DecisionAction.HOLD,
-                action = RuleAction(
-                    type = RuleActionType.REVIEW_QUEUE,
-                    reasonCode = ReasonCode("velocity_spike"),
-                    queue = "trust_safety_l2",
-                ),
+                action = reviewAction,
                 priority = 100,
             ),
         )
+    }
 
     private fun sampleScore(): ScoreResult =
         ScoreResult(

@@ -189,6 +189,54 @@ class RuleEvaluatorTest {
             ),
             result.skipped,
         )
+        assertEquals(
+            listOf(
+                RuleEvaluationConditionResult.DISABLED,
+                RuleEvaluationConditionResult.UNAVAILABLE,
+                RuleEvaluationConditionResult.UNAVAILABLE,
+            ),
+            result.evaluations.map { it.conditionResult },
+        )
+        assertEquals(FeatureValue.TextValue("1000.00"), result.evaluations[1].featureValues["amount"])
+        assertEquals(FeatureValue.Unavailable("redis timeout"), result.evaluations[2].featureValues["fraud_model_score"])
+    }
+
+    @Test
+    fun `records complete per rule evaluation details`() {
+        val result = evaluator.evaluate(
+            snapshot = sampleSnapshot(
+                values = linkedMapOf(
+                    "amount" to FeatureValue.NumberValue(1000.0),
+                ),
+            ),
+            rules = listOf(
+                rule(
+                    id = "matched-rule",
+                    priority = 100,
+                    action = RuleAction(
+                        type = RuleActionType.REVIEW_QUEUE,
+                        reasonCode = ReasonCode("REVIEW"),
+                        reversible = true,
+                        queue = "trust_safety_l2",
+                    ),
+                    condition = RuleCondition.Comparison("amount", ComparisonOperator.GTE, RuleValue.NumberValue(1000.0)),
+                ),
+                rule(
+                    id = "non-matching-rule",
+                    priority = 200,
+                    action = RuleAction(type = RuleActionType.ALLOW),
+                    condition = RuleCondition.Comparison("amount", ComparisonOperator.LT, RuleValue.NumberValue(1000.0)),
+                ),
+            ),
+        )
+
+        assertEquals(listOf("matched-rule"), result.matches.map { it.ruleId })
+        assertEquals(
+            listOf(RuleEvaluationConditionResult.MATCHED, RuleEvaluationConditionResult.NOT_MATCHED),
+            result.evaluations.map { it.conditionResult },
+        )
+        assertEquals(listOf(setOf("amount"), setOf("amount")), result.evaluations.map { it.featureValues.keys })
+        assertEquals("matched-rule", result.resolutionCandidates.single().ruleId)
     }
 
     @Test
