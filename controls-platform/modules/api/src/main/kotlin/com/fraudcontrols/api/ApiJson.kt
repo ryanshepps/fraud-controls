@@ -59,12 +59,6 @@ fun parseActor(payload: String): String =
     parseObject(payload.ifBlank { "{}" }, "request")
         .optionalString("actor") ?: "local"
 
-fun parseGlobalKillSwitchMode(payload: String): GlobalKillSwitchMode {
-    val mode = parseObject(payload, "global kill switch").requiredString("mode")
-    return GlobalKillSwitchMode.entries.firstOrNull { it.wireName == mode }
-        ?: throw ApiJsonException("unsupported global kill switch mode: $mode")
-}
-
 fun RuleDefinition.toJsonObject(): JsonObject =
     buildJsonObject {
         put("id", id)

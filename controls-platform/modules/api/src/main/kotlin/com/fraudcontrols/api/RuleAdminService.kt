@@ -144,39 +144,6 @@ class RuleAdminService(
     }
 }
 
-class GlobalKillSwitchService(
-    private val auditPublisher: RuleChangeAuditPublisher = NoopRuleChangeAuditPublisher,
-    private val clock: Clock = Clock.systemUTC(),
-) {
-    private val mutex = Mutex()
-    private var mode: GlobalKillSwitchMode = GlobalKillSwitchMode.NORMAL
-
-    suspend fun current(): GlobalKillSwitchMode =
-        mutex.withLock { mode }
-
-    suspend fun set(
-        nextMode: GlobalKillSwitchMode,
-        actor: String,
-    ): GlobalKillSwitchMode {
-        val previous = mutex.withLock {
-            val previous = mode
-            mode = nextMode
-            previous
-        }
-        auditPublisher.publish(
-            RuleChangeEvent(
-                ruleId = "global",
-                ruleVersion = 0,
-                changeType = RuleChangeType.GLOBAL_KILL_SWITCH,
-                actor = actor,
-                occurredAt = Instant.now(clock),
-                diff = mapOf("mode" to "${previous.wireName}->${nextMode.wireName}"),
-            ),
-        )
-        return nextMode
-    }
-}
-
 interface RuleChangeAuditPublisher {
     suspend fun publish(event: RuleChangeEvent)
 }
@@ -233,15 +200,6 @@ enum class RuleChangeType {
     UPDATE,
     PROMOTE,
     DISABLE,
-    GLOBAL_KILL_SWITCH,
-}
-
-enum class GlobalKillSwitchMode(
-    val wireName: String,
-) {
-    NORMAL("normal"),
-    FAIL_OPEN("fail_open"),
-    FAIL_CLOSED("fail_closed"),
 }
 
 sealed class RuleAdminException(message: String) : IllegalArgumentException(message) {
