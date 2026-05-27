@@ -20,6 +20,21 @@ class DemoScoringServerTest(unittest.TestCase):
         self.assertGreaterEqual(first["calibrated_score"], 0.0)
         self.assertLessEqual(first["calibrated_score"], 1.0)
 
+    def test_candidate_model_returns_distinct_demo_score(self) -> None:
+        payload = {
+            "model_id": "candidate-demo-v1",
+            "amount": 125.0,
+            "sender_account_age_days": 0.25,
+            "is_new_counterparty": True,
+        }
+
+        primary = score_transaction({k: v for k, v in payload.items() if k != "model_id"})
+        candidate = score_transaction(payload)
+
+        self.assertEqual("candidate-demo-v1", candidate["model_version"])
+        self.assertNotEqual(primary["raw_score"], candidate["raw_score"])
+        self.assertIn("candidate_demo_score", candidate["shap_values"])
+
 
 if __name__ == "__main__":
     unittest.main()
