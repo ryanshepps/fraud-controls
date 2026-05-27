@@ -3,9 +3,6 @@ package com.fraudcontrols.demo
 import com.fraudcontrols.api.KafkaRuleChangeAuditPublisher
 import com.fraudcontrols.api.RuleAdminService
 import com.fraudcontrols.api.startAdminHttpServer
-import com.fraudcontrols.core.Factor
-import com.fraudcontrols.core.ReasonCode
-import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.core.ScoringContext
 import com.fraudcontrols.decisioning.DecisionAuditSink
 import com.fraudcontrols.decisioning.DecisionEngine
@@ -24,16 +21,10 @@ import com.fraudcontrols.observability.kafkaShadowReporterConsumer
 import com.fraudcontrols.persistence.DynamoDecisionAuditReader
 import com.fraudcontrols.persistence.DynamoDecisionAuditSink
 import com.fraudcontrols.persistence.RedisVelocityFeatureStore
-import com.fraudcontrols.rules.ComparisonOperator
-import com.fraudcontrols.rules.RuleAction
-import com.fraudcontrols.rules.RuleActionType
-import com.fraudcontrols.rules.RuleCondition
-import com.fraudcontrols.rules.RuleDefinition
-import com.fraudcontrols.rules.RuleMode
-import com.fraudcontrols.rules.RuleValue
-import com.fraudcontrols.scoring.Scorer
+import com.fraudcontrols.scoring.ScorerFactory
 import com.fraudcontrols.scoring.ScorerFeatureProvider
-import com.fraudcontrols.scoring.ShadowScorer
+import com.fraudcontrols.scoring.XGBoostScoreClient
+import com.fraudcontrols.scoring.XGBoostScoreResponse
 import com.fraudcontrols.streaming.KafkaDecisionPublisher
 import com.fraudcontrols.streaming.KafkaRuleEvaluationPublisher
 import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
@@ -45,8 +36,6 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.Properties
-import java.util.UUID
-import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -79,8 +68,9 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
 
 fun main() {
     runBlocking {
-        val config = DemoRuntimeConfig.fromEnvironment()
-        println("starting controls demo runtime with kafka=${config.kafkaBootstrapServers}")
+        val runtime = RuntimeConfigLoader().load()
+        val config = runtime.application
+        println("starting ${config.serviceName} ${config.environment} runtime with kafka=${config.kafkaBootstrapServers}")
 
         retry("kafka topics") {
             createTopics(
@@ -105,23 +95,32 @@ fun main() {
         val metricsAdapter = DecisioningMetricsAdapter(controlsMetrics)
         val decisionAuditReader = DynamoDecisionAuditReader(dynamoClient, config.auditTable)
         val ruleAdminService = RuleAdminService(
-            initialRules = demoRules(),
+            initialRules = runtime.initialRules,
             auditPublisher = KafkaRuleChangeAuditPublisher(producer, config.ruleChangesTopic),
         )
 
-        val scorer = ShadowScorer(
-            name = "demo_sidecar_shadow_runner",
-            primary = DemoSidecarScorer(config.scoringSidecarUrl),
-            shadows = listOf(DemoCandidateScorer()),
-            sink = KafkaShadowEvaluationSink(producer, config.shadowEvaluationsTopic),
+        val baseFeatureProviders = defaultEventFeatureProviders() + defaultVelocityFeatureProviders(velocityStore)
+        val scorerFactory = ScorerFactory(
+            featureResolver = FeatureResolver(baseFeatureProviders),
+            ruleBasedConfigsByPath = runtime.ruleBasedConfigsByPath,
+            xgBoostClientFactory = { definition ->
+                HttpXGBoostScoreClient(
+                    endpoint = definition.sidecarAddress
+                        ?: throw RuntimeConfigException("xgboost scorer ${definition.name} requires sidecar_address"),
+                )
+            },
+            shadowEvaluationSink = KafkaShadowEvaluationSink(producer, config.shadowEvaluationsTopic),
         )
+        val scorers = scorerFactory.build(runtime.scoring)
+        val scoringFeatureProviders = runtime.scoring.features.map { binding ->
+            if (binding.name != FraudFeatureNames.FRAUD_MODEL_SCORE) {
+                throw RuntimeConfigException("unsupported scoring feature binding: ${binding.name}")
+            }
+            ScorerFeatureProvider(scorers.getValue(binding.scorer))
+        }
         val processor = DecisionProcessor(
             engine = DecisionEngine(
-                featureResolver = FeatureResolver(
-                    defaultEventFeatureProviders() +
-                        defaultVelocityFeatureProviders(velocityStore) +
-                        ScorerFeatureProvider(scorer),
-                ),
+                featureResolver = FeatureResolver(baseFeatureProviders + scoringFeatureProviders),
                 metrics = metricsAdapter,
             ),
             auditSink = FanOutDecisionAuditSink(
@@ -162,11 +161,12 @@ fun main() {
         startAdminHttpServer(
             ruleAdminService = ruleAdminService,
             decisionRecords = decisionAuditReader,
-            host = "0.0.0.0",
+            host = config.httpHost,
             port = config.httpPort,
+            metricsPath = config.metricsPath,
             metricsScrape = controlsMetrics::scrape,
         )
-        println("admin API ready on :${config.httpPort}; metrics at /metrics")
+        println("admin API ready on ${config.httpHost}:${config.httpPort}; metrics at ${config.metricsPath}")
 
         launch(Dispatchers.IO) {
             while (isActive) {
@@ -194,62 +194,22 @@ fun main() {
     }
 }
 
-private data class DemoRuntimeConfig(
-    val kafkaBootstrapServers: String,
-    val transactionsTopic: String,
-    val decisionsTopic: String,
-    val ruleEvaluationsTopic: String,
-    val shadowEvaluationsTopic: String,
-    val ruleChangesTopic: String,
-    val fraudLabelsTopic: String,
-    val dynamoEndpoint: String,
-    val auditTable: String,
-    val redisHost: String,
-    val redisPort: Int,
-    val scoringSidecarUrl: String,
-    val httpPort: Int,
-) {
-    companion object {
-        fun fromEnvironment(): DemoRuntimeConfig =
-            DemoRuntimeConfig(
-                kafkaBootstrapServers = env("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"),
-                transactionsTopic = env("TRANSACTIONS_TOPIC", "transactions"),
-                decisionsTopic = env("DECISIONS_TOPIC", "controls.decisions"),
-                ruleEvaluationsTopic = env("RULE_EVALUATIONS_TOPIC", "rule_evaluations"),
-                shadowEvaluationsTopic = env("SHADOW_EVALUATIONS_TOPIC", "shadow_evaluations"),
-                ruleChangesTopic = env("RULE_CHANGES_TOPIC", "rule_changes"),
-                fraudLabelsTopic = env("FRAUD_LABELS_TOPIC", "fraud_labels"),
-                dynamoEndpoint = env("DYNAMODB_ENDPOINT", "http://localhost:18000"),
-                auditTable = env("DYNAMODB_DECISIONS_TABLE", "controls_decisions"),
-                redisHost = env("REDIS_HOST", "localhost"),
-                redisPort = env("REDIS_PORT", "6379").toInt(),
-                scoringSidecarUrl = env("SCORING_SIDECAR_URL", "http://localhost:50051/score"),
-                httpPort = env("HTTP_PORT", "8080").toInt(),
-            )
-
-        private fun env(
-            name: String,
-            default: String,
-        ): String =
-            System.getenv(name)?.takeIf { it.isNotBlank() } ?: default
-    }
-}
-
-private class DemoSidecarScorer(
+private class HttpXGBoostScoreClient(
     private val endpoint: String,
-) : Scorer {
-    override val name: String = "demo_sidecar"
-    override val version: String = "deterministic-demo-v1"
+) : XGBoostScoreClient {
     private val client = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(2))
         .build()
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
+    override suspend fun score(
+        context: ScoringContext,
+        modelId: String,
+    ): XGBoostScoreResponse =
         withContext(Dispatchers.IO) {
             val request = HttpRequest.newBuilder(URI.create(endpoint))
                 .timeout(Duration.ofSeconds(5))
                 .header("content-type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(context.event.toScoreJson()))
+                .POST(HttpRequest.BodyPublishers.ofString(context.event.toScoreJson(modelId)))
                 .build()
             val startedAt = System.nanoTime()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
@@ -258,45 +218,18 @@ private class DemoSidecarScorer(
             }
             val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000.0
             val payload = Json.parseToJsonElement(response.body()).jsonObject
-            val factors = payload["shap_values"]?.jsonObject.orEmpty().map { (name, value) ->
-                Factor(
-                    name = name,
-                    contribution = value.jsonPrimitive.doubleOrNull ?: 0.0,
-                )
-            }
-            ScoreResult(
-                score = payload.requiredDouble("calibrated_score").coerceIn(0.0, 1.0),
-                rawScore = payload["raw_score"]?.jsonPrimitive?.doubleOrNull,
-                contributingFactors = factors,
-                modelVersion = payload["model_version"]?.jsonPrimitive?.content ?: version,
-                latencyMs = elapsedMs,
+            XGBoostScoreResponse(
+                rawScore = payload.requiredDouble("raw_score"),
+                shapValues = payload["shap_values"]?.jsonObject.orEmpty().mapValues { (_, value) ->
+                    value.jsonPrimitive.doubleOrNull ?: 0.0
+                } + mapOf("sidecar_latency_ms" to elapsedMs),
             )
         }
 }
 
-private class DemoCandidateScorer : Scorer {
-    override val name: String = "demo_candidate"
-    override val version: String = "candidate-demo-v1"
-
-    override suspend fun score(context: ScoringContext): ScoreResult {
-        val event = context.event
-        val raw = -1.5 +
-            min(event.amount.amount.toDouble() / 150.0, 3.0) +
-            if (event.isNewCounterparty) 1.1 else 0.0 +
-            if (event.senderAccountAgeDays < 2.0) 1.0 else 0.0
-        val score = (1.0 / (1.0 + kotlin.math.exp(-raw))).coerceIn(0.0, 1.0)
-        return ScoreResult(
-            score = score,
-            rawScore = raw,
-            contributingFactors = listOf(Factor("candidate_demo_score", score)),
-            modelVersion = version,
-            latencyMs = 1.0,
-        )
-    }
-}
-
-private fun com.fraudcontrols.core.TransactionEvent.toScoreJson(): String =
+private fun com.fraudcontrols.core.TransactionEvent.toScoreJson(modelId: String): String =
     buildJsonObject {
+        put("model_id", modelId)
         put("event_id", eventId.value)
         put("amount", amount.amount.toDouble())
         put("sender_account_age_days", senderAccountAgeDays)
@@ -315,72 +248,6 @@ private class FanOutDecisionAuditSink(
         }
     }
 }
-
-private fun demoRules(): List<RuleDefinition> =
-    listOf(
-        RuleDefinition(
-            id = "demo-new-account-cashout",
-            version = 1,
-            description = "Block larger sends from very new accounts to new counterparties.",
-            enabled = true,
-            mode = RuleMode.ENFORCE,
-            priority = 200,
-            condition = RuleCondition.All(
-                listOf(
-                    RuleCondition.Comparison(FraudFeatureNames.AMOUNT, ComparisonOperator.GTE, RuleValue.NumberValue(100.0)),
-                    RuleCondition.Comparison(
-                        FraudFeatureNames.SENDER_ACCOUNT_AGE_DAYS,
-                        ComparisonOperator.LTE,
-                        RuleValue.NumberValue(1.0),
-                    ),
-                    RuleCondition.Comparison(
-                        FraudFeatureNames.IS_NEW_COUNTERPARTY,
-                        ComparisonOperator.EQ,
-                        RuleValue.BooleanValue(true),
-                    ),
-                ),
-            ),
-            action = RuleAction(
-                type = RuleActionType.BLOCK,
-                reasonCode = ReasonCode("demo_new_account_cashout"),
-            ),
-        ),
-        RuleDefinition(
-            id = "demo-velocity-review",
-            version = 1,
-            description = "Hold senders with repeated sends in the last five minutes.",
-            enabled = true,
-            mode = RuleMode.ENFORCE,
-            priority = 100,
-            condition = RuleCondition.Comparison(
-                FraudFeatureNames.SENDER_SEND_COUNT_5M,
-                ComparisonOperator.GTE,
-                RuleValue.NumberValue(4.0),
-            ),
-            action = RuleAction(
-                type = RuleActionType.REVIEW_QUEUE,
-                reasonCode = ReasonCode("demo_velocity_review"),
-                queue = "trust_safety_l2",
-            ),
-        ),
-        RuleDefinition(
-            id = "demo-score-shadow",
-            version = 1,
-            description = "Shadow-only score threshold for promote/disable demos.",
-            enabled = true,
-            mode = RuleMode.SHADOW,
-            priority = 150,
-            condition = RuleCondition.Comparison(
-                FraudFeatureNames.FRAUD_MODEL_SCORE,
-                ComparisonOperator.GTE,
-                RuleValue.NumberValue(0.55),
-            ),
-            action = RuleAction(
-                type = RuleActionType.BLOCK,
-                reasonCode = ReasonCode("demo_score_shadow"),
-            ),
-        ),
-    )
 
 private suspend fun retry(
     description: String,
