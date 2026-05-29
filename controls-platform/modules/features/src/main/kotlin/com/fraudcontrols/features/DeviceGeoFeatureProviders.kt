@@ -20,21 +20,20 @@ class DeviceGeoFeatureProvider(
     override val featureName: String,
     private val store: DeviceGeoFeatureStore,
 ) : FeatureProvider {
-    override suspend fun compute(context: ScoringContext): FeatureValue =
-        when (featureName) {
-            FraudFeatureNames.DEVICE_DISTINCT_ACCOUNTS_30D -> {
-                store.deviceDistinctAccounts30d(context.event.senderDeviceFingerprint, context.event.timestamp)
-                    ?.let { FeatureValue.NumberValue(it) }
-                    ?: FeatureValue.Unavailable("device aggregate unavailable")
-            }
-            FraudFeatureNames.IMPOSSIBLE_TRAVEL_FROM_LAST_LOGIN -> {
-                store.impossibleTravelFromLastLogin(
-                    customerId = context.event.senderId,
-                    currentGeo = context.event.senderGeo,
-                    at = context.event.timestamp,
-                )?.let { FeatureValue.BooleanValue(it) }
-                    ?: FeatureValue.Unavailable("last-login geo state unavailable")
-            }
-            else -> FeatureValue.Unavailable("device/geo feature is not supported: $featureName")
+    override suspend fun compute(context: ScoringContext): FeatureValue = when (featureName) {
+        FraudFeatureNames.DEVICE_DISTINCT_ACCOUNTS_30D -> {
+            store.deviceDistinctAccounts30d(context.event.senderDeviceFingerprint, context.event.timestamp)
+                ?.let { FeatureValue.NumberValue(it) }
+                ?: FeatureValue.Unavailable("device aggregate unavailable")
         }
+        FraudFeatureNames.IMPOSSIBLE_TRAVEL_FROM_LAST_LOGIN -> {
+            store.impossibleTravelFromLastLogin(
+                customerId = context.event.senderId,
+                currentGeo = context.event.senderGeo,
+                at = context.event.timestamp,
+            )?.let { FeatureValue.BooleanValue(it) }
+                ?: FeatureValue.Unavailable("last-login geo state unavailable")
+        }
+        else -> FeatureValue.Unavailable("device/geo feature is not supported: $featureName")
+    }
 }

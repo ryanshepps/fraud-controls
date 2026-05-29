@@ -116,19 +116,18 @@ class ShadowEvaluationReporterTest {
         scorerName: String,
         role: ShadowScorerRole,
         score: Double,
-    ): ShadowEvaluation =
-        ShadowEvaluation(
-            eventId = EventId("evt-1"),
-            scorerName = scorerName,
-            scorerVersion = "v1",
-            role = role,
-            result = ScoreResult(
-                score = score,
-                rawScore = null,
-                contributingFactors = listOf(Factor("fixed", score)),
-                modelVersion = "v1",
-                latencyMs = 1.0,
-            ),
-            error = null,
-        )
+    ): ShadowEvaluation = ShadowEvaluation(
+        eventId = EventId("evt-1"),
+        scorerName = scorerName,
+        scorerVersion = "v1",
+        role = role,
+        result = ScoreResult(
+            score = score,
+            rawScore = null,
+            contributingFactors = listOf(Factor("fixed", score)),
+            modelVersion = "v1",
+            latencyMs = 1.0,
+        ),
+        error = null,
+    )
 }

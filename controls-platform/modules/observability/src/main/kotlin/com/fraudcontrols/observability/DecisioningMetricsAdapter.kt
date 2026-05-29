@@ -1,8 +1,8 @@
 package com.fraudcontrols.observability
 
 import com.fraudcontrols.core.Decision
-import com.fraudcontrols.decisioning.DecisioningMetrics
 import com.fraudcontrols.decisioning.DecisionSideEffect
+import com.fraudcontrols.decisioning.DecisioningMetrics
 import com.fraudcontrols.rules.RuleEvaluationResult
 
 class DecisioningMetricsAdapter(

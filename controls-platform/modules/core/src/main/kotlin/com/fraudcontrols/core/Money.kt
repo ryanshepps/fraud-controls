@@ -15,7 +15,6 @@ data class Money(
     fun isPositive(): Boolean = amount > BigDecimal.ZERO
 
     companion object {
-        fun usd(amount: String): Money =
-            Money(BigDecimal(amount).setScale(2, RoundingMode.UNNECESSARY), Currency.getInstance("USD"))
+        fun usd(amount: String): Money = Money(BigDecimal(amount).setScale(2, RoundingMode.UNNECESSARY), Currency.getInstance("USD"))
     }
 }

@@ -53,13 +53,12 @@ class RuleEvaluator {
     private fun evaluateCondition(
         condition: RuleCondition,
         snapshot: FeatureSnapshot,
-    ): ConditionResult =
-        when (condition) {
-            is RuleCondition.All -> evaluateAll(condition.conditions, snapshot)
-            is RuleCondition.Any -> evaluateAny(condition.conditions, snapshot)
-            is RuleCondition.Comparison -> evaluateComparison(condition, snapshot)
-            is RuleCondition.Not -> evaluateNot(condition.condition, snapshot)
-        }
+    ): ConditionResult = when (condition) {
+        is RuleCondition.All -> evaluateAll(condition.conditions, snapshot)
+        is RuleCondition.Any -> evaluateAny(condition.conditions, snapshot)
+        is RuleCondition.Comparison -> evaluateComparison(condition, snapshot)
+        is RuleCondition.Not -> evaluateNot(condition.condition, snapshot)
+    }
 
     private fun evaluateAll(
         conditions: List<RuleCondition>,
@@ -106,12 +105,11 @@ class RuleEvaluator {
     private fun evaluateNot(
         condition: RuleCondition,
         snapshot: FeatureSnapshot,
-    ): ConditionResult =
-        when (val result = evaluateCondition(condition, snapshot)) {
-            ConditionResult.Matched -> ConditionResult.NotMatched
-            ConditionResult.NotMatched -> ConditionResult.Matched
-            is ConditionResult.Unavailable -> result
-        }
+    ): ConditionResult = when (val result = evaluateCondition(condition, snapshot)) {
+        ConditionResult.Matched -> ConditionResult.NotMatched
+        ConditionResult.NotMatched -> ConditionResult.Matched
+        is ConditionResult.Unavailable -> result
+    }
 
     private fun evaluateComparison(
         condition: RuleCondition.Comparison,
@@ -165,17 +163,16 @@ class RuleEvaluator {
     private fun valuesEqual(
         featureValue: FeatureValue,
         expected: RuleValue,
-    ): Boolean =
-        when (featureValue) {
-            is FeatureValue.BooleanValue -> expected == RuleValue.BooleanValue(featureValue.value)
-            is FeatureValue.NumberValue -> expected == RuleValue.NumberValue(featureValue.value)
-            is FeatureValue.ScoreValue -> expected == RuleValue.NumberValue(featureValue.value)
-            is FeatureValue.SetValue -> expected == RuleValue.SetValue(featureValue.values.map { RuleValue.TextValue(it) }.toSet())
-            is FeatureValue.TextValue -> expected == RuleValue.TextValue(featureValue.value)
-            is FeatureValue.Missing,
-            is FeatureValue.Unavailable,
-            -> false
-        }
+    ): Boolean = when (featureValue) {
+        is FeatureValue.BooleanValue -> expected == RuleValue.BooleanValue(featureValue.value)
+        is FeatureValue.NumberValue -> expected == RuleValue.NumberValue(featureValue.value)
+        is FeatureValue.ScoreValue -> expected == RuleValue.NumberValue(featureValue.value)
+        is FeatureValue.SetValue -> expected == RuleValue.SetValue(featureValue.values.map { RuleValue.TextValue(it) }.toSet())
+        is FeatureValue.TextValue -> expected == RuleValue.TextValue(featureValue.value)
+        is FeatureValue.Missing,
+        is FeatureValue.Unavailable,
+        -> false
+    }
 
     private fun compareNumbers(
         featureName: String,
@@ -199,50 +196,47 @@ class RuleEvaluator {
         featureName: String,
         featureValue: FeatureValue,
         expected: RuleValue,
-    ): MatchResult =
-        if (expected !is RuleValue.SetValue) {
-            MatchResult.Invalid("rule value for $featureName expected set for membership but was ${expected.typeName()}")
-        } else {
-            MatchResult.Available(
-                when (featureValue) {
-                    is FeatureValue.BooleanValue -> expected.values.contains(RuleValue.BooleanValue(featureValue.value))
-                    is FeatureValue.NumberValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
-                    is FeatureValue.ScoreValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
-                    is FeatureValue.SetValue -> featureValue.values.any { expected.values.contains(RuleValue.TextValue(it)) }
-                    is FeatureValue.TextValue -> expected.values.contains(RuleValue.TextValue(featureValue.value))
-                    is FeatureValue.Missing,
-                    is FeatureValue.Unavailable,
-                    -> false
-                },
-            )
-        }
+    ): MatchResult = if (expected !is RuleValue.SetValue) {
+        MatchResult.Invalid("rule value for $featureName expected set for membership but was ${expected.typeName()}")
+    } else {
+        MatchResult.Available(
+            when (featureValue) {
+                is FeatureValue.BooleanValue -> expected.values.contains(RuleValue.BooleanValue(featureValue.value))
+                is FeatureValue.NumberValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
+                is FeatureValue.ScoreValue -> expected.values.contains(RuleValue.NumberValue(featureValue.value))
+                is FeatureValue.SetValue -> featureValue.values.any { expected.values.contains(RuleValue.TextValue(it)) }
+                is FeatureValue.TextValue -> expected.values.contains(RuleValue.TextValue(featureValue.value))
+                is FeatureValue.Missing,
+                is FeatureValue.Unavailable,
+                -> false
+            },
+        )
+    }
 }
 
 class ActionResolver {
-    fun resolve(matches: List<RuleMatch>): ResolvedRuleAction? =
-        resolutionCandidates(matches).firstOrNull()
+    fun resolve(matches: List<RuleMatch>): ResolvedRuleAction? = resolutionCandidates(matches).firstOrNull()
 
-    fun resolutionCandidates(matches: List<RuleMatch>): List<ResolvedRuleAction> =
-        matches
-            .asSequence()
-            .filter { it.mode == RuleMode.ENFORCE }
-            .mapNotNull { match ->
-                match.action.decisionAction()?.let { decisionAction ->
-                    ResolvedRuleAction(
-                        ruleId = match.ruleId,
-                        ruleVersion = match.ruleVersion,
-                        decisionAction = decisionAction,
-                        action = match.action,
-                        priority = match.priority,
-                    )
-                }
+    fun resolutionCandidates(matches: List<RuleMatch>): List<ResolvedRuleAction> = matches
+        .asSequence()
+        .filter { it.mode == RuleMode.ENFORCE }
+        .mapNotNull { match ->
+            match.action.decisionAction()?.let { decisionAction ->
+                ResolvedRuleAction(
+                    ruleId = match.ruleId,
+                    ruleVersion = match.ruleVersion,
+                    decisionAction = decisionAction,
+                    action = match.action,
+                    priority = match.priority,
+                )
             }
-            .sortedWith(
-                compareByDescending<ResolvedRuleAction> { it.priority }
-                    .thenByDescending { it.decisionAction.severity() }
-                    .thenBy { it.ruleId },
-            )
-            .toList()
+        }
+        .sortedWith(
+            compareByDescending<ResolvedRuleAction> { it.priority }
+                .thenByDescending { it.decisionAction.severity() }
+                .thenBy { it.ruleId },
+        )
+        .toList()
 }
 
 data class RuleEvaluationResult(
@@ -276,29 +270,27 @@ data class RuleEvaluationDetail(
         }
     }
 
-    fun toRuleMatch(): RuleMatch? =
-        if (conditionResult == RuleEvaluationConditionResult.MATCHED) {
-            RuleMatch(
-                ruleId = ruleId,
-                ruleVersion = ruleVersion,
-                mode = mode,
-                priority = priority,
-                action = action,
-            )
-        } else {
-            null
-        }
+    fun toRuleMatch(): RuleMatch? = if (conditionResult == RuleEvaluationConditionResult.MATCHED) {
+        RuleMatch(
+            ruleId = ruleId,
+            ruleVersion = ruleVersion,
+            mode = mode,
+            priority = priority,
+            action = action,
+        )
+    } else {
+        null
+    }
 
-    fun toSkippedRule(): SkippedRule? =
-        if (conditionResult.isSkipped) {
-            SkippedRule(
-                ruleId = ruleId,
-                ruleVersion = ruleVersion,
-                reason = skippedReason ?: error("skipped reason invariant violated"),
-            )
-        } else {
-            null
-        }
+    fun toSkippedRule(): SkippedRule? = if (conditionResult.isSkipped) {
+        SkippedRule(
+            ruleId = ruleId,
+            ruleVersion = ruleVersion,
+            reason = skippedReason ?: error("skipped reason invariant violated"),
+        )
+    } else {
+        null
+    }
 }
 
 enum class RuleEvaluationConditionResult {
@@ -353,58 +345,52 @@ private fun RuleDefinition.toEvaluationDetail(
     conditionResult: RuleEvaluationConditionResult,
     skippedReason: String?,
     featureValues: Map<String, FeatureValue>,
-): RuleEvaluationDetail =
-    RuleEvaluationDetail(
-        ruleId = id,
-        ruleVersion = version,
-        mode = effectiveMode,
-        priority = priority,
-        conditionResult = conditionResult,
-        action = action,
-        featureValues = featureValues,
-        skippedReason = skippedReason,
-    )
+): RuleEvaluationDetail = RuleEvaluationDetail(
+    ruleId = id,
+    ruleVersion = version,
+    mode = effectiveMode,
+    priority = priority,
+    conditionResult = conditionResult,
+    action = action,
+    featureValues = featureValues,
+    skippedReason = skippedReason,
+)
 
-private fun RuleCondition.auditFeatureValues(snapshot: FeatureSnapshot): Map<String, FeatureValue> =
-    featureNames().associateWith { featureName ->
-        snapshot.values[featureName] ?: FeatureValue.Missing("feature not present in snapshot")
-    }
+private fun RuleCondition.auditFeatureValues(snapshot: FeatureSnapshot): Map<String, FeatureValue> = featureNames().associateWith { featureName ->
+    snapshot.values[featureName] ?: FeatureValue.Missing("feature not present in snapshot")
+}
 
-private fun DecisionAction.severity(): Int =
-    when (this) {
-        DecisionAction.ALLOW -> 0
-        DecisionAction.CHALLENGE -> 1
-        DecisionAction.HOLD -> 2
-        DecisionAction.DENY -> 3
-    }
+private fun DecisionAction.severity(): Int = when (this) {
+    DecisionAction.ALLOW -> 0
+    DecisionAction.CHALLENGE -> 1
+    DecisionAction.HOLD -> 2
+    DecisionAction.DENY -> 3
+}
 
-private fun FeatureValue.typeName(): String =
-    when (this) {
-        is FeatureValue.BooleanValue -> "boolean"
-        is FeatureValue.Missing -> "missing"
-        is FeatureValue.NumberValue -> "numeric"
-        is FeatureValue.ScoreValue -> "numeric"
-        is FeatureValue.SetValue -> "set"
-        is FeatureValue.TextValue -> "text"
-        is FeatureValue.Unavailable -> "unavailable"
-    }
+private fun FeatureValue.typeName(): String = when (this) {
+    is FeatureValue.BooleanValue -> "boolean"
+    is FeatureValue.Missing -> "missing"
+    is FeatureValue.NumberValue -> "numeric"
+    is FeatureValue.ScoreValue -> "numeric"
+    is FeatureValue.SetValue -> "set"
+    is FeatureValue.TextValue -> "text"
+    is FeatureValue.Unavailable -> "unavailable"
+}
 
-private fun FeatureValue.numericValue(): Double? =
-    when (this) {
-        is FeatureValue.NumberValue -> value
-        is FeatureValue.ScoreValue -> value
-        is FeatureValue.BooleanValue,
-        is FeatureValue.Missing,
-        is FeatureValue.SetValue,
-        is FeatureValue.TextValue,
-        is FeatureValue.Unavailable,
-        -> null
-    }
+private fun FeatureValue.numericValue(): Double? = when (this) {
+    is FeatureValue.NumberValue -> value
+    is FeatureValue.ScoreValue -> value
+    is FeatureValue.BooleanValue,
+    is FeatureValue.Missing,
+    is FeatureValue.SetValue,
+    is FeatureValue.TextValue,
+    is FeatureValue.Unavailable,
+    -> null
+}
 
-private fun RuleValue.typeName(): String =
-    when (this) {
-        is RuleValue.BooleanValue -> "boolean"
-        is RuleValue.NumberValue -> "numeric"
-        is RuleValue.SetValue -> "set"
-        is RuleValue.TextValue -> "text"
-    }
+private fun RuleValue.typeName(): String = when (this) {
+    is RuleValue.BooleanValue -> "boolean"
+    is RuleValue.NumberValue -> "numeric"
+    is RuleValue.SetValue -> "set"
+    is RuleValue.TextValue -> "text"
+}

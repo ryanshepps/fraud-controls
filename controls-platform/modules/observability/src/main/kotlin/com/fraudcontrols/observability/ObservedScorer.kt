@@ -36,6 +36,5 @@ class ObservedScorer(
         }
     }
 
-    private fun elapsedMs(startedAt: Long): Double =
-        (System.nanoTime() - startedAt) / 1_000_000.0
+    private fun elapsedMs(startedAt: Long): Double = (System.nanoTime() - startedAt) / 1_000_000.0
 }

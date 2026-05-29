@@ -2,9 +2,9 @@ package com.fraudcontrols.observability
 
 import com.fraudcontrols.scoring.ShadowEvaluation
 import com.fraudcontrols.scoring.ShadowEvaluationSink
-import java.time.Duration
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
+import java.time.Duration
 
 class KafkaShadowEvaluationSink(
     private val producer: Producer<String, String>,

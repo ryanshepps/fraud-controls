@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "mypy>=1.8",
+    "pandas-stubs>=3.0.0.260204",
     "pytest>=8.0",
     "ruff>=0.5",
     "types-PyYAML>=6.0.12.20260518",

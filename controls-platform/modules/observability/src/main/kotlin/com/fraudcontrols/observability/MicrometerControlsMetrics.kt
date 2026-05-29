@@ -100,13 +100,12 @@ class MicrometerControlsMetrics(
     private fun histogramTimer(
         name: String,
         tags: List<Tag> = emptyList(),
-    ): Timer =
-        Timer.builder(name)
-            .publishPercentileHistogram()
-            .minimumExpectedValue(Duration.ofMillis(1))
-            .maximumExpectedValue(Duration.ofSeconds(10))
-            .tags(tags)
-            .register(registry)
+    ): Timer = Timer.builder(name)
+        .publishPercentileHistogram()
+        .minimumExpectedValue(Duration.ofMillis(1))
+        .maximumExpectedValue(Duration.ofSeconds(10))
+        .tags(tags)
+        .register(registry)
 
     private fun gauge(
         name: String,
@@ -125,8 +124,6 @@ class MicrometerControlsMetrics(
     private val gauges = ConcurrentHashMap<String, AtomicReference<Double>>()
 }
 
-fun MeterRegistry.controlsMetricsScrapeOrNull(): String? =
-    (this as? PrometheusMeterRegistry)?.scrape()
+fun MeterRegistry.controlsMetricsScrapeOrNull(): String? = (this as? PrometheusMeterRegistry)?.scrape()
 
-private fun Double.toDuration(): Duration =
-    Duration.ofNanos((this * 1_000_000.0).toLong().coerceAtLeast(0L))
+private fun Double.toDuration(): Duration = Duration.ofNanos((this * 1_000_000.0).toLong().coerceAtLeast(0L))

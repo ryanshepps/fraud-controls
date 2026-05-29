@@ -43,10 +43,11 @@ fun Application.installControlsAdminRoutes(
         post("/rules") {
             val body = call.receiveText()
             try {
-                val created = ruleAdminService.create(
-                    rule = parseRuleDefinitionJson(body),
-                    actor = parseActor(body),
-                )
+                val created =
+                    ruleAdminService.create(
+                        rule = parseRuleDefinitionJson(body),
+                        actor = parseActor(body),
+                    )
                 call.respondJson(created.toJsonObject().toString(), HttpStatusCode.Created)
             } catch (error: IllegalArgumentException) {
                 call.respondApiError(error)
@@ -57,11 +58,12 @@ fun Application.installControlsAdminRoutes(
             val ruleId = call.parameters["id"].orEmpty()
             val body = call.receiveText()
             try {
-                val updated = ruleAdminService.update(
-                    ruleId = ruleId,
-                    replacement = parseRuleDefinitionJson(body, idOverride = ruleId),
-                    actor = parseActor(body),
-                )
+                val updated =
+                    ruleAdminService.update(
+                        ruleId = ruleId,
+                        replacement = parseRuleDefinitionJson(body, idOverride = ruleId),
+                        actor = parseActor(body),
+                    )
                 call.respondJson(updated.toJsonObject().toString())
             } catch (error: IllegalArgumentException) {
                 call.respondApiError(error)
@@ -72,11 +74,12 @@ fun Application.installControlsAdminRoutes(
             val ruleId = call.parameters["id"].orEmpty()
             val body = call.receiveText()
             try {
-                val promoted = ruleAdminService.promote(
-                    ruleId = ruleId,
-                    confirmed = parsePromotionConfirmation(body),
-                    actor = parseActor(body),
-                )
+                val promoted =
+                    ruleAdminService.promote(
+                        ruleId = ruleId,
+                        confirmed = parsePromotionConfirmation(body),
+                        actor = parseActor(body),
+                    )
                 call.respondJson(promoted.toJsonObject().toString())
             } catch (error: IllegalArgumentException) {
                 call.respondApiError(error)
@@ -87,10 +90,11 @@ fun Application.installControlsAdminRoutes(
             val ruleId = call.parameters["id"].orEmpty()
             val body = call.receiveText()
             try {
-                val disabled = ruleAdminService.disable(
-                    ruleId = ruleId,
-                    actor = parseActor(body),
-                )
+                val disabled =
+                    ruleAdminService.disable(
+                        ruleId = ruleId,
+                        actor = parseActor(body),
+                    )
                 call.respondJson(disabled.toJsonObject().toString())
             } catch (error: IllegalArgumentException) {
                 call.respondApiError(error)
@@ -113,12 +117,13 @@ fun Application.installControlsAdminRoutes(
         }
 
         get("/decisions/{event_id}") {
-            val eventId = try {
-                parseDecisionLookupEventId(call.parameters["event_id"].orEmpty())
-            } catch (error: IllegalArgumentException) {
-                call.respondJson(errorJson(error.message.orEmpty()), HttpStatusCode.BadRequest)
-                return@get
-            }
+            val eventId =
+                try {
+                    parseDecisionLookupEventId(call.parameters["event_id"].orEmpty())
+                } catch (error: IllegalArgumentException) {
+                    call.respondJson(errorJson(error.message.orEmpty()), HttpStatusCode.BadRequest)
+                    return@get
+                }
             val record = decisionRecords.find(EventId(eventId))
             if (record == null) {
                 call.respondJson(errorJson("decision not found: $eventId"), HttpStatusCode.NotFound)
@@ -126,7 +131,6 @@ fun Application.installControlsAdminRoutes(
                 call.respondJson(record.toApiJsonObject().toString())
             }
         }
-
     }
 }
 
@@ -143,15 +147,14 @@ fun startAdminHttpServer(
     port: Int = 8080,
     metricsPath: String = "/metrics",
     metricsScrape: (() -> String)? = null,
-) =
-    embeddedServer(Netty, host = host, port = port) {
-        installControlsAdminRoutes(
-            ruleAdminService = ruleAdminService,
-            decisionRecords = decisionRecords,
-            metricsPath = metricsPath,
-            metricsScrape = metricsScrape,
-        )
-    }.start(wait = false)
+) = embeddedServer(Netty, host = host, port = port) {
+    installControlsAdminRoutes(
+        ruleAdminService = ruleAdminService,
+        decisionRecords = decisionRecords,
+        metricsPath = metricsPath,
+        metricsScrape = metricsScrape,
+    )
+}.start(wait = false)
 
 private suspend fun io.ktor.server.application.ApplicationCall.respondJson(
     payload: String,
@@ -161,13 +164,14 @@ private suspend fun io.ktor.server.application.ApplicationCall.respondJson(
 }
 
 private suspend fun io.ktor.server.application.ApplicationCall.respondApiError(error: IllegalArgumentException) {
-    val status = when (error) {
-        is RuleAdminException.BadRequest,
-        is ApiJsonException,
-        -> HttpStatusCode.BadRequest
-        is RuleAdminException.Conflict -> HttpStatusCode.Conflict
-        is RuleAdminException.NotFound -> HttpStatusCode.NotFound
-        else -> HttpStatusCode.BadRequest
-    }
+    val status =
+        when (error) {
+            is RuleAdminException.BadRequest,
+            is ApiJsonException,
+            -> HttpStatusCode.BadRequest
+            is RuleAdminException.Conflict -> HttpStatusCode.Conflict
+            is RuleAdminException.NotFound -> HttpStatusCode.NotFound
+            else -> HttpStatusCode.BadRequest
+        }
     respondJson(errorJson(error.message.orEmpty()), status)
 }

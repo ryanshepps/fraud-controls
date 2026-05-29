@@ -47,8 +47,7 @@ class StubXGBoostScoreClient(
     override suspend fun score(
         context: ScoringContext,
         modelId: String,
-    ): XGBoostScoreResponse =
-        XGBoostScoreResponse(rawScore = rawScore, shapValues = shapValues)
+    ): XGBoostScoreResponse = XGBoostScoreResponse(rawScore = rawScore, shapValues = shapValues)
 }
 
 /**

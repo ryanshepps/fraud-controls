@@ -19,8 +19,7 @@ class ScorerFeatureProvider(
 ) : FeatureProvider {
     override val featureName: String = FraudFeatureNames.FRAUD_MODEL_SCORE
 
-    override suspend fun compute(context: ScoringContext) =
-        FeatureValue.ScoreValue(scorer.score(context))
+    override suspend fun compute(context: ScoringContext) = FeatureValue.ScoreValue(scorer.score(context))
 }
 
 data class RuleBasedScorerConfig(
@@ -57,8 +56,7 @@ data class PlattCalibrator(
         require(intercept.isFinite()) { "calibrator intercept must be finite" }
     }
 
-    fun calibrate(rawScore: Double): Double =
-        sigmoid(slope * rawScore + intercept)
+    fun calibrate(rawScore: Double): Double = sigmoid(slope * rawScore + intercept)
 }
 
 internal fun sigmoid(rawScore: Double): Double {
@@ -70,11 +68,9 @@ internal fun sigmoid(rawScore: Double): Double {
     }
 }
 
-internal fun elapsedMs(startNanos: Long): Double =
-    (System.nanoTime() - startNanos) / 1_000_000.0
+internal fun elapsedMs(startNanos: Long): Double = (System.nanoTime() - startNanos) / 1_000_000.0
 
 internal fun factor(
     name: String,
     contribution: Double,
-): Factor =
-    Factor(name = name, contribution = contribution)
+): Factor = Factor(name = name, contribution = contribution)

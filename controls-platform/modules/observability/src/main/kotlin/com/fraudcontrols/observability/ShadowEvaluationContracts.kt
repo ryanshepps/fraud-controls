@@ -59,49 +59,43 @@ fun parseShadowEvaluationEventContract(payload: String): List<ShadowEvaluation> 
     }
 }
 
-private fun ShadowEvaluation.toJsonObject(): JsonObject =
-    buildJsonObject {
-        put("scorer_name", scorerName)
-        put("scorer_version", scorerVersion)
-        put("role", role.name)
-        result?.let { put("score", it.toJsonObject()) }
-        error?.let { put("error", it) }
-    }
+private fun ShadowEvaluation.toJsonObject(): JsonObject = buildJsonObject {
+    put("scorer_name", scorerName)
+    put("scorer_version", scorerVersion)
+    put("role", role.name)
+    result?.let { put("score", it.toJsonObject()) }
+    error?.let { put("error", it) }
+}
 
-private fun ScoreResult.toJsonObject(): JsonObject =
-    buildJsonObject {
-        put("score", score)
-        rawScore?.let { put("raw_score", it) }
-        put("contributing_factors", JsonArray(contributingFactors.map { it.toJsonObject() }))
-        put("model_version", modelVersion)
-        put("latency_ms", latencyMs)
-        put("degraded", degraded)
-    }
+private fun ScoreResult.toJsonObject(): JsonObject = buildJsonObject {
+    put("score", score)
+    rawScore?.let { put("raw_score", it) }
+    put("contributing_factors", JsonArray(contributingFactors.map { it.toJsonObject() }))
+    put("model_version", modelVersion)
+    put("latency_ms", latencyMs)
+    put("degraded", degraded)
+}
 
-private fun JsonObject.toScoreResult(): ScoreResult =
-    ScoreResult(
-        score = requiredDouble("score"),
-        rawScore = this["raw_score"]?.jsonPrimitive?.doubleOrNull,
-        contributingFactors = this["contributing_factors"]?.jsonArray.orEmpty().map { element ->
-            val factor = element.jsonObject
-            Factor(
-                name = factor.requiredString("name"),
-                contribution = factor.requiredDouble("contribution"),
-            )
-        },
-        modelVersion = requiredString("model_version"),
-        latencyMs = requiredDouble("latency_ms"),
-        degraded = this["degraded"]?.jsonPrimitive?.boolean ?: false,
-    )
+private fun JsonObject.toScoreResult(): ScoreResult = ScoreResult(
+    score = requiredDouble("score"),
+    rawScore = this["raw_score"]?.jsonPrimitive?.doubleOrNull,
+    contributingFactors = this["contributing_factors"]?.jsonArray.orEmpty().map { element ->
+        val factor = element.jsonObject
+        Factor(
+            name = factor.requiredString("name"),
+            contribution = factor.requiredDouble("contribution"),
+        )
+    },
+    modelVersion = requiredString("model_version"),
+    latencyMs = requiredDouble("latency_ms"),
+    degraded = this["degraded"]?.jsonPrimitive?.boolean ?: false,
+)
 
-private fun Factor.toJsonObject(): JsonObject =
-    buildJsonObject {
-        put("name", name)
-        put("contribution", contribution)
-    }
+private fun Factor.toJsonObject(): JsonObject = buildJsonObject {
+    put("name", name)
+    put("contribution", contribution)
+}
 
-private fun JsonObject.requiredString(name: String): String =
-    this[name]?.jsonPrimitive?.content ?: error("missing required field: $name")
+private fun JsonObject.requiredString(name: String): String = this[name]?.jsonPrimitive?.content ?: error("missing required field: $name")
 
-private fun JsonObject.requiredDouble(name: String): Double =
-    this[name]?.jsonPrimitive?.double ?: error("missing required field: $name")
+private fun JsonObject.requiredDouble(name: String): Double = this[name]?.jsonPrimitive?.double ?: error("missing required field: $name")

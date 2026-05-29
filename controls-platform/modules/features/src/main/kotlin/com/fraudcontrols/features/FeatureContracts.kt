@@ -19,12 +19,11 @@ class FeatureResolver(
         require(providersByName.size == providers.count()) { "feature providers must have unique names" }
     }
 
-    fun request(context: ScoringContext): FeatureResolutionRequest =
-        FeatureResolutionRequest(
-            eventId = context.eventId,
-            context = context,
-            providersByName = providersByName,
-        )
+    fun request(context: ScoringContext): FeatureResolutionRequest = FeatureResolutionRequest(
+        eventId = context.eventId,
+        context = context,
+        providersByName = providersByName,
+    )
 }
 
 class FeatureResolutionRequest internal constructor(

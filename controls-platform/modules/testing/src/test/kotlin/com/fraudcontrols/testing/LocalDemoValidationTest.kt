@@ -36,17 +36,6 @@ import com.fraudcontrols.streaming.KafkaRuleEvaluationPublisher
 import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
 import com.fraudcontrols.streaming.kafkaStringConsumer
 import com.fraudcontrols.streaming.kafkaStringProducer
-import java.math.BigDecimal
-import java.net.URI
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
-import java.util.Properties
-import java.util.UUID
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -75,6 +64,17 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.KeyType
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
+import java.math.BigDecimal
+import java.net.URI
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.Properties
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class LocalDemoValidationTest {
     @Test
@@ -272,33 +272,32 @@ class LocalDemoValidationTest {
     private fun demoScoreRule(
         mode: RuleMode,
         enabled: Boolean,
-    ): RuleDefinition =
-        RuleDefinition(
-            id = "demo-score-shadow",
-            version = 1,
-            description = "Demo score and velocity rule",
-            enabled = enabled,
-            mode = mode,
-            priority = 100,
-            condition = RuleCondition.All(
-                listOf(
-                    RuleCondition.Comparison(
-                        featureName = FraudFeatureNames.FRAUD_MODEL_SCORE,
-                        operator = ComparisonOperator.GTE,
-                        value = RuleValue.NumberValue(0.1),
-                    ),
-                    RuleCondition.Comparison(
-                        featureName = FraudFeatureNames.SENDER_SEND_COUNT_5M,
-                        operator = ComparisonOperator.GTE,
-                        value = RuleValue.NumberValue(1.0),
-                    ),
+    ): RuleDefinition = RuleDefinition(
+        id = "demo-score-shadow",
+        version = 1,
+        description = "Demo score and velocity rule",
+        enabled = enabled,
+        mode = mode,
+        priority = 100,
+        condition = RuleCondition.All(
+            listOf(
+                RuleCondition.Comparison(
+                    featureName = FraudFeatureNames.FRAUD_MODEL_SCORE,
+                    operator = ComparisonOperator.GTE,
+                    value = RuleValue.NumberValue(0.1),
+                ),
+                RuleCondition.Comparison(
+                    featureName = FraudFeatureNames.SENDER_SEND_COUNT_5M,
+                    operator = ComparisonOperator.GTE,
+                    value = RuleValue.NumberValue(1.0),
                 ),
             ),
-            action = RuleAction(
-                type = RuleActionType.BLOCK,
-                reasonCode = ReasonCode("demo_score_rule"),
-            ),
-        )
+        ),
+        action = RuleAction(
+            type = RuleActionType.BLOCK,
+            reasonCode = ReasonCode("demo_score_rule"),
+        ),
+    )
 
     private fun fraudgenPayload(eventId: String): String =
         """
@@ -360,14 +359,13 @@ class LocalDemoValidationTest {
         dynamoClient.waiter().waitUntilTableExists { it.tableName(tableName) }
     }
 
-    private fun dynamoClient(container: GenericContainer<*>): DynamoDbClient =
-        DynamoDbClient.builder()
-            .endpointOverride(URI.create("http://${container.host}:${container.getMappedPort(8000)}"))
-            .region(Region.US_EAST_1)
-            .credentialsProvider(
-                StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
-            )
-            .build()
+    private fun dynamoClient(container: GenericContainer<*>): DynamoDbClient = DynamoDbClient.builder()
+        .endpointOverride(URI.create("http://${container.host}:${container.getMappedPort(8000)}"))
+        .region(Region.US_EAST_1)
+        .credentialsProvider(
+            StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
+        )
+        .build()
 
     private suspend fun readKafkaValues(
         bootstrapServers: String,
@@ -434,14 +432,13 @@ private class DemoFixedScorer(
     override val version: String,
     private val score: Double,
 ) : Scorer {
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = score,
-            contributingFactors = listOf(Factor(name = "fixed_demo_score", contribution = score)),
-            modelVersion = version,
-            latencyMs = 1.0,
-        )
+    override suspend fun score(context: ScoringContext): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = score,
+        contributingFactors = listOf(Factor(name = "fixed_demo_score", contribution = score)),
+        modelVersion = version,
+        latencyMs = 1.0,
+    )
 }
 
 private class DemoTestContainer(

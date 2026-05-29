@@ -142,11 +142,10 @@ enum class RuleActionType {
     TAG,
 }
 
-fun RuleAction.decisionAction(): DecisionAction? =
-    when (type) {
-        RuleActionType.ALLOW -> DecisionAction.ALLOW
-        RuleActionType.BLOCK -> DecisionAction.DENY
-        RuleActionType.CHALLENGE -> DecisionAction.CHALLENGE
-        RuleActionType.REVIEW_QUEUE -> DecisionAction.HOLD
-        RuleActionType.TAG -> null
-    }
+fun RuleAction.decisionAction(): DecisionAction? = when (type) {
+    RuleActionType.ALLOW -> DecisionAction.ALLOW
+    RuleActionType.BLOCK -> DecisionAction.DENY
+    RuleActionType.CHALLENGE -> DecisionAction.CHALLENGE
+    RuleActionType.REVIEW_QUEUE -> DecisionAction.HOLD
+    RuleActionType.TAG -> null
+}

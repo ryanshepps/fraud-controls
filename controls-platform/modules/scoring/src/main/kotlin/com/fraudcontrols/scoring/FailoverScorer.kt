@@ -2,10 +2,10 @@ package com.fraudcontrols.scoring
 
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.core.ScoringContext
-import java.time.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import java.time.Duration
 
 /**
  * Orchestrates degraded-mode scoring for the scoring module.
@@ -36,19 +36,17 @@ class FailoverScorer(
         require(!timeout.isNegative && !timeout.isZero) { "scorer timeout must be positive" }
     }
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        try {
-            withTimeout(timeout.toMillis()) {
-                primary.score(context)
-            }
-        } catch (_: TimeoutCancellationException) {
-            fallback.score(context).markDegraded()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: RuntimeException) {
-            fallback.score(context).markDegraded()
+    override suspend fun score(context: ScoringContext): ScoreResult = try {
+        withTimeout(timeout.toMillis()) {
+            primary.score(context)
         }
+    } catch (_: TimeoutCancellationException) {
+        fallback.score(context).markDegraded()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: RuntimeException) {
+        fallback.score(context).markDegraded()
+    }
 
-    private fun ScoreResult.markDegraded(): ScoreResult =
-        copy(degraded = true)
+    private fun ScoreResult.markDegraded(): ScoreResult = copy(degraded = true)
 }

@@ -2,14 +2,14 @@ package com.fraudcontrols.api
 
 import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleMode
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 class RuleAdminService(
     initialRules: Iterable<RuleDefinition> = emptyList(),
@@ -27,36 +27,36 @@ class RuleAdminService(
         }
     }
 
-    suspend fun list(): List<RuleDefinition> =
-        mutex.withLock {
-            currentRules.values.sortedWith(compareByDescending<RuleDefinition> { it.priority }.thenBy { it.id })
-        }
+    suspend fun list(): List<RuleDefinition> = mutex.withLock {
+        currentRules.values.sortedWith(compareByDescending<RuleDefinition> { it.priority }.thenBy { it.id })
+    }
 
-    suspend fun history(ruleId: String): List<RuleDefinition> =
-        mutex.withLock {
-            ruleHistory[ruleId]?.toList() ?: throw RuleAdminException.NotFound("rule not found: $ruleId")
-        }
+    suspend fun history(ruleId: String): List<RuleDefinition> = mutex.withLock {
+        ruleHistory[ruleId]?.toList() ?: throw RuleAdminException.NotFound("rule not found: $ruleId")
+    }
 
     suspend fun create(
         rule: RuleDefinition,
         actor: String,
     ): RuleDefinition {
-        val (created, event) = mutex.withLock {
-            if (currentRules.containsKey(rule.id)) {
-                throw RuleAdminException.Conflict("rule already exists: ${rule.id}")
+        val (created, event) =
+            mutex.withLock {
+                if (currentRules.containsKey(rule.id)) {
+                    throw RuleAdminException.Conflict("rule already exists: ${rule.id}")
+                }
+                val created = rule.copy(version = 1)
+                currentRules[created.id] = created
+                ruleHistory.getOrPut(created.id) { mutableListOf() }.add(created)
+                created to
+                    RuleChangeEvent(
+                        ruleId = created.id,
+                        ruleVersion = created.version,
+                        changeType = RuleChangeType.CREATE,
+                        actor = actor,
+                        occurredAt = Instant.now(clock),
+                        diff = diff(null, created),
+                    )
             }
-            val created = rule.copy(version = 1)
-            currentRules[created.id] = created
-            ruleHistory.getOrPut(created.id) { mutableListOf() }.add(created)
-            created to RuleChangeEvent(
-                ruleId = created.id,
-                ruleVersion = created.version,
-                changeType = RuleChangeType.CREATE,
-                actor = actor,
-                occurredAt = Instant.now(clock),
-                diff = diff(null, created),
-            )
-        }
         auditPublisher.publish(event)
         return created
     }
@@ -65,17 +65,15 @@ class RuleAdminService(
         ruleId: String,
         replacement: RuleDefinition,
         actor: String,
-    ): RuleDefinition {
-        return mutateExisting(
-            ruleId = ruleId,
-            actor = actor,
-            changeType = RuleChangeType.UPDATE,
-        ) { previous ->
-            replacement.copy(
-                id = ruleId,
-                version = previous.version + 1,
-            )
-        }
+    ): RuleDefinition = mutateExisting(
+        ruleId = ruleId,
+        actor = actor,
+        changeType = RuleChangeType.UPDATE,
+    ) { previous ->
+        replacement.copy(
+            id = ruleId,
+            version = previous.version + 1,
+        )
     }
 
     suspend fun promote(
@@ -105,18 +103,16 @@ class RuleAdminService(
     suspend fun disable(
         ruleId: String,
         actor: String,
-    ): RuleDefinition {
-        return mutateExisting(
-            ruleId = ruleId,
-            actor = actor,
-            changeType = RuleChangeType.DISABLE,
-        ) { previous ->
-            previous.copy(
-                version = previous.version + 1,
-                enabled = false,
-                mode = RuleMode.DISABLED,
-            )
-        }
+    ): RuleDefinition = mutateExisting(
+        ruleId = ruleId,
+        actor = actor,
+        changeType = RuleChangeType.DISABLE,
+    ) { previous ->
+        previous.copy(
+            version = previous.version + 1,
+            enabled = false,
+            mode = RuleMode.DISABLED,
+        )
     }
 
     private suspend fun mutateExisting(
@@ -125,20 +121,22 @@ class RuleAdminService(
         changeType: RuleChangeType,
         nextRule: (RuleDefinition) -> RuleDefinition,
     ): RuleDefinition {
-        val (updated, event) = mutex.withLock {
-            val previousRule = currentRules[ruleId] ?: throw RuleAdminException.NotFound("rule not found: $ruleId")
-            val updated = nextRule(previousRule)
-            currentRules[ruleId] = updated
-            ruleHistory.getOrPut(ruleId) { mutableListOf() }.add(updated)
-            updated to RuleChangeEvent(
-                ruleId = ruleId,
-                ruleVersion = updated.version,
-                changeType = changeType,
-                actor = actor,
-                occurredAt = Instant.now(clock),
-                diff = diff(previousRule, updated),
-            )
-        }
+        val (updated, event) =
+            mutex.withLock {
+                val previousRule = currentRules[ruleId] ?: throw RuleAdminException.NotFound("rule not found: $ruleId")
+                val updated = nextRule(previousRule)
+                currentRules[ruleId] = updated
+                ruleHistory.getOrPut(ruleId) { mutableListOf() }.add(updated)
+                updated to
+                    RuleChangeEvent(
+                        ruleId = ruleId,
+                        ruleVersion = updated.version,
+                        changeType = changeType,
+                        actor = actor,
+                        occurredAt = Instant.now(clock),
+                        diff = diff(previousRule, updated),
+                    )
+            }
         auditPublisher.publish(event)
         return updated
     }
@@ -162,10 +160,9 @@ class InMemoryRuleChangeAuditPublisher : RuleChangeAuditPublisher {
         }
     }
 
-    suspend fun events(): List<RuleChangeEvent> =
-        mutex.withLock {
-            publishedEvents.toList()
-        }
+    suspend fun events(): List<RuleChangeEvent> = mutex.withLock {
+        publishedEvents.toList()
+    }
 }
 
 class KafkaRuleChangeAuditPublisher(
@@ -174,9 +171,10 @@ class KafkaRuleChangeAuditPublisher(
     private val sendTimeout: Duration = Duration.ofSeconds(5),
 ) : RuleChangeAuditPublisher {
     override suspend fun publish(event: RuleChangeEvent) {
-        producer.send(
-            ProducerRecord(topic, event.ruleId, event.toJsonObject().toString()),
-        ).get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS)
+        producer
+            .send(
+                ProducerRecord(topic, event.ruleId, event.toJsonObject().toString()),
+            ).get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS)
     }
 }
 
@@ -202,10 +200,20 @@ enum class RuleChangeType {
     DISABLE,
 }
 
-sealed class RuleAdminException(message: String) : IllegalArgumentException(message) {
-    class BadRequest(message: String) : RuleAdminException(message)
-    class Conflict(message: String) : RuleAdminException(message)
-    class NotFound(message: String) : RuleAdminException(message)
+sealed class RuleAdminException(
+    message: String,
+) : IllegalArgumentException(message) {
+    class BadRequest(
+        message: String,
+    ) : RuleAdminException(message)
+
+    class Conflict(
+        message: String,
+    ) : RuleAdminException(message)
+
+    class NotFound(
+        message: String,
+    ) : RuleAdminException(message)
 }
 
 private fun diff(

@@ -51,14 +51,13 @@ class RuleBasedScorer(
         )
     }
 
-    private fun FeatureValue.numericValueOr(missingValue: Double): Double =
-        when (this) {
-            is FeatureValue.BooleanValue -> if (value) 1.0 else 0.0
-            is FeatureValue.NumberValue -> value
-            is FeatureValue.ScoreValue -> value
-            is FeatureValue.Missing -> missingValue
-            is FeatureValue.Unavailable -> missingValue
-            is FeatureValue.SetValue -> missingValue
-            is FeatureValue.TextValue -> missingValue
-        }
+    private fun FeatureValue.numericValueOr(missingValue: Double): Double = when (this) {
+        is FeatureValue.BooleanValue -> if (value) 1.0 else 0.0
+        is FeatureValue.NumberValue -> value
+        is FeatureValue.ScoreValue -> value
+        is FeatureValue.Missing -> missingValue
+        is FeatureValue.Unavailable -> missingValue
+        is FeatureValue.SetValue -> missingValue
+        is FeatureValue.TextValue -> missingValue
+    }
 }

@@ -27,22 +27,22 @@ import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.rules.RuleValue
 import com.fraudcontrols.scoring.Scorer
 import com.fraudcontrols.scoring.ScorerFeatureProvider
-import java.math.BigDecimal
-import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.math.BigDecimal
+import java.time.Instant
+import kotlin.coroutines.coroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import kotlin.coroutines.coroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DecisionEngineTest {
@@ -293,29 +293,27 @@ class DecisionEngineTest {
         assertTrue(error.message.orEmpty().contains("no provider registered"))
     }
 
-    private fun engine(score: ScoreResult): DecisionEngine =
-        DecisionEngine(
-            featureResolver = FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(FixedScorer(score))),
-        )
+    private fun engine(score: ScoreResult): DecisionEngine = DecisionEngine(
+        featureResolver = FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(FixedScorer(score))),
+    )
 
-    private fun sampleEvent(amount: String): TransactionEvent =
-        TransactionEvent(
-            eventId = EventId("evt-1"),
-            timestamp = Instant.parse("2026-01-01T00:00:00Z"),
-            senderId = CustomerId("sender-1"),
-            recipientId = CustomerId("recipient-1"),
-            amount = Money.usd(amount),
-            transactionType = TransactionType.P2P_SEND,
-            senderDeviceFingerprint = DeviceFingerprint("device-1"),
-            senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
-            senderBalanceBefore = BigDecimal("2000.00"),
-            senderBalanceAfter = BigDecimal("500.00"),
-            recipientBalanceBefore = BigDecimal("50.00"),
-            recipientBalanceAfter = BigDecimal("1550.00"),
-            senderAccountAgeDays = 30.0,
-            recipientAccountAgeDays = 120.0,
-            isNewCounterparty = true,
-        )
+    private fun sampleEvent(amount: String): TransactionEvent = TransactionEvent(
+        eventId = EventId("evt-1"),
+        timestamp = Instant.parse("2026-01-01T00:00:00Z"),
+        senderId = CustomerId("sender-1"),
+        recipientId = CustomerId("recipient-1"),
+        amount = Money.usd(amount),
+        transactionType = TransactionType.P2P_SEND,
+        senderDeviceFingerprint = DeviceFingerprint("device-1"),
+        senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
+        senderBalanceBefore = BigDecimal("2000.00"),
+        senderBalanceAfter = BigDecimal("500.00"),
+        recipientBalanceBefore = BigDecimal("50.00"),
+        recipientBalanceAfter = BigDecimal("1550.00"),
+        senderAccountAgeDays = 30.0,
+        recipientAccountAgeDays = 120.0,
+        isNewCounterparty = true,
+    )
 
     private fun largeAmountRule(
         id: String = "large-amount",
@@ -323,32 +321,30 @@ class DecisionEngineTest {
         priority: Int = 100,
         action: RuleActionType = RuleActionType.REVIEW_QUEUE,
         reasonCode: String? = "large_amount",
-    ): RuleDefinition =
-        RuleDefinition(
-            id = id,
-            version = 1,
-            mode = mode,
-            priority = priority,
-            condition = RuleCondition.Comparison(
-                featureName = FraudFeatureNames.AMOUNT,
-                operator = ComparisonOperator.GTE,
-                value = RuleValue.NumberValue(1000.0),
-            ),
-            action = RuleAction(
-                type = action,
-                reasonCode = reasonCode?.let(::ReasonCode),
-                queue = if (action == RuleActionType.REVIEW_QUEUE) "trust_safety_l2" else null,
-            ),
-        )
+    ): RuleDefinition = RuleDefinition(
+        id = id,
+        version = 1,
+        mode = mode,
+        priority = priority,
+        condition = RuleCondition.Comparison(
+            featureName = FraudFeatureNames.AMOUNT,
+            operator = ComparisonOperator.GTE,
+            value = RuleValue.NumberValue(1000.0),
+        ),
+        action = RuleAction(
+            type = action,
+            reasonCode = reasonCode?.let(::ReasonCode),
+            queue = if (action == RuleActionType.REVIEW_QUEUE) "trust_safety_l2" else null,
+        ),
+    )
 
-    private fun sampleScore(score: Double): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = null,
-            contributingFactors = listOf(Factor(name = "test_score", contribution = 0.1)),
-            modelVersion = "fixed-v1",
-            latencyMs = 3.0,
-        )
+    private fun sampleScore(score: Double): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = null,
+        contributingFactors = listOf(Factor(name = "test_score", contribution = 0.1)),
+        modelVersion = "fixed-v1",
+        latencyMs = 3.0,
+    )
 }
 
 private class FixedScorer(
