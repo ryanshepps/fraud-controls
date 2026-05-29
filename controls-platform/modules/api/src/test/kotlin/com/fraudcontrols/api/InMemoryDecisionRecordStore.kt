@@ -9,7 +9,7 @@ import com.fraudcontrols.decisioning.contracts.toDecisionAuditRowContract
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class InMemoryDecisionRecordStore(
+internal class InMemoryDecisionRecordStore(
     initialRecords: Iterable<DecisionRecord> = emptyList(),
 ) : DecisionAuditSink,
     DecisionRecordReader {
