@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
 plugins {
     kotlin("jvm") version "2.0.21" apply false
+    kotlin("plugin.serialization") version "2.0.21" apply false
     id("com.google.protobuf") version "0.9.4" apply false
     id("com.diffplug.spotless") version "8.5.1" apply false
 }

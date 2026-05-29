@@ -15,6 +15,7 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
@@ -93,6 +94,36 @@ class AdminHttpApiTest {
     }
 
     @Test
+    fun `optional action bodies default the actor while preserving validation`() = testApplication {
+        val audit = InMemoryRuleChangeAuditPublisher()
+        val rules = RuleAdminService(auditPublisher = audit, clock = clock)
+        application {
+            installControlsAdminRoutes(
+                ruleAdminService = rules,
+                decisionRecords = InMemoryDecisionRecordStore(),
+            )
+        }
+
+        client.post("/rules") {
+            contentType(ContentType.Application.Json)
+            setBody(ruleJson(id = "disable-without-body", mode = "shadow", actor = "risk-admin"))
+        }
+        client.post("/rules") {
+            contentType(ContentType.Application.Json)
+            setBody(ruleJson(id = "promote-without-confirmation", mode = "shadow", actor = "risk-admin"))
+        }
+
+        val disable = client.post("/rules/disable-without-body/disable")
+        val promote = client.post("/rules/promote-without-confirmation/promote")
+
+        assertEquals(HttpStatusCode.OK, disable.status)
+        assertTrue(disable.bodyAsText().contains(""""mode":"disabled""""))
+        assertEquals(HttpStatusCode.BadRequest, promote.status)
+        assertTrue(promote.bodyAsText().contains(""""error":"promotion requires confirmation""""))
+        assertEquals("local", audit.events().last().actor)
+    }
+
+    @Test
     fun `admin routes reject malformed rule payloads and missing decisions`() = testApplication {
         application {
             installControlsAdminRoutes(
@@ -110,13 +141,49 @@ class AdminHttpApiTest {
 
         assertEquals(HttpStatusCode.BadRequest, badRule.status)
         assertEquals(HttpStatusCode.NotFound, missingDecision.status)
+        assertTrue(badRule.bodyAsText().contains(""""error":"""))
+        assertTrue(badRule.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
+    }
+
+    @Test
+    fun `status pages return JSON errors for malformed JSON and rule conflicts`() = testApplication {
+        val rules = RuleAdminService()
+        application {
+            installControlsAdminRoutes(
+                ruleAdminService = rules,
+                decisionRecords = InMemoryDecisionRecordStore(),
+            )
+        }
+
+        val malformed =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"id":""")
+            }
+        val created =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody(ruleJson(id = "duplicate-score", mode = "shadow", actor = "risk-admin"))
+            }
+        val duplicate =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody(ruleJson(id = "duplicate-score", mode = "shadow", actor = "risk-admin"))
+            }
+
+        assertEquals(HttpStatusCode.BadRequest, malformed.status)
+        assertTrue(malformed.bodyAsText().contains(""""error":"""))
+        assertTrue(malformed.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
+        assertEquals(HttpStatusCode.Created, created.status)
+        assertEquals(HttpStatusCode.Conflict, duplicate.status)
+        assertTrue(duplicate.bodyAsText().contains(""""error":"rule already exists: duplicate-score""""))
     }
 
     @Test
     fun `decision lookup returns the persisted audit record`() = testApplication {
         val store = InMemoryDecisionRecordStore()
         runBlocking {
-            DecisionProcessor(
+            val result = DecisionProcessor(
                 engine =
                 DecisionEngine(
                     FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(AdminFixedScorer(0.42))),
@@ -130,6 +197,7 @@ class AdminHttpApiTest {
                 rules = emptyList(),
                 decidedAt = Instant.parse("2026-05-26T12:00:00Z"),
             )
+            store.record(result.record)
         }
         application {
             installControlsAdminRoutes(

@@ -4,19 +4,25 @@ import com.fraudcontrols.core.EventId
 import com.fraudcontrols.decisioning.DecisionRecordReader
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.JsonConvertException
+import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.decodeFromString
 
 fun Application.installControlsAdminRoutes(
     ruleAdminService: RuleAdminService,
@@ -24,6 +30,8 @@ fun Application.installControlsAdminRoutes(
     metricsPath: String = "/metrics",
     metricsScrape: (() -> String)? = null,
 ) {
+    installControlsAdminApiPlugins()
+
     routing {
         if (metricsScrape != null) {
             get(metricsPath) {
@@ -32,112 +40,95 @@ fun Application.installControlsAdminRoutes(
         }
 
         get("/rules") {
-            val rules = ruleAdminService.list()
-            call.respondJson(
-                buildJsonObject {
-                    put("rules", JsonArray(rules.map { it.toJsonObject() }))
-                }.toString(),
-            )
+            call.respond(RuleListResponse(ruleAdminService.list().map { it.toResponse() }))
         }
 
         post("/rules") {
-            val body = call.receiveText()
-            try {
-                val created =
-                    ruleAdminService.create(
-                        rule = parseRuleDefinitionJson(body),
-                        actor = parseActor(body),
-                    )
-                call.respondJson(created.toJsonObject().toString(), HttpStatusCode.Created)
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
+            val request = call.receive<RuleDefinitionRequest>()
+            val created =
+                ruleAdminService.create(
+                    rule = request.toRuleDefinition(),
+                    actor = request.actorOrDefault(),
+                )
+            call.respond(HttpStatusCode.Created, created.toResponse())
         }
 
         put("/rules/{id}") {
-            val ruleId = call.parameters["id"].orEmpty()
-            val body = call.receiveText()
-            try {
-                val updated =
-                    ruleAdminService.update(
-                        ruleId = ruleId,
-                        replacement = parseRuleDefinitionJson(body, idOverride = ruleId),
-                        actor = parseActor(body),
-                    )
-                call.respondJson(updated.toJsonObject().toString())
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
+            val ruleId = parseRequiredPathParameter("id", call.parameters["id"].orEmpty())
+            val request = call.receive<RuleDefinitionRequest>()
+            val updated =
+                ruleAdminService.update(
+                    ruleId = ruleId,
+                    replacement = request.toRuleDefinition(idOverride = ruleId),
+                    actor = request.actorOrDefault(),
+                )
+            call.respond(updated.toResponse())
         }
 
         post("/rules/{id}/promote") {
-            val ruleId = call.parameters["id"].orEmpty()
-            val body = call.receiveText()
-            try {
-                val promoted =
-                    ruleAdminService.promote(
-                        ruleId = ruleId,
-                        confirmed = parsePromotionConfirmation(body),
-                        actor = parseActor(body),
-                    )
-                call.respondJson(promoted.toJsonObject().toString())
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
+            val ruleId = parseRequiredPathParameter("id", call.parameters["id"].orEmpty())
+            val request = call.receiveOptionalJsonBody(PromotionRequest())
+            val promoted =
+                ruleAdminService.promote(
+                    ruleId = ruleId,
+                    confirmed = request.confirm,
+                    actor = request.actorOrDefault(),
+                )
+            call.respond(promoted.toResponse())
         }
 
         post("/rules/{id}/disable") {
-            val ruleId = call.parameters["id"].orEmpty()
-            val body = call.receiveText()
-            try {
-                val disabled =
-                    ruleAdminService.disable(
-                        ruleId = ruleId,
-                        actor = parseActor(body),
-                    )
-                call.respondJson(disabled.toJsonObject().toString())
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
+            val ruleId = parseRequiredPathParameter("id", call.parameters["id"].orEmpty())
+            val request = call.receiveOptionalJsonBody(RuleActorRequest())
+            val disabled =
+                ruleAdminService.disable(
+                    ruleId = ruleId,
+                    actor = request.actorOrDefault(),
+                )
+            call.respond(disabled.toResponse())
         }
 
         get("/rules/{id}/history") {
-            val ruleId = call.parameters["id"].orEmpty()
-            try {
-                val history = ruleAdminService.history(ruleId)
-                call.respondJson(
-                    buildJsonObject {
-                        put("rule_id", ruleId)
-                        put("versions", JsonArray(history.map { it.toJsonObject() }))
-                    }.toString(),
-                )
-            } catch (error: IllegalArgumentException) {
-                call.respondApiError(error)
-            }
+            val ruleId = parseRequiredPathParameter("id", call.parameters["id"].orEmpty())
+            val history = ruleAdminService.history(ruleId)
+            call.respond(RuleHistoryResponse(ruleId = ruleId, versions = history.map { it.toResponse() }))
         }
 
         get("/decisions/{event_id}") {
-            val eventId =
-                try {
-                    parseDecisionLookupEventId(call.parameters["event_id"].orEmpty())
-                } catch (error: IllegalArgumentException) {
-                    call.respondJson(errorJson(error.message.orEmpty()), HttpStatusCode.BadRequest)
-                    return@get
-                }
+            val eventId = parseDecisionLookupEventId(call.parameters["event_id"].orEmpty())
             val record = decisionRecords.find(EventId(eventId))
             if (record == null) {
-                call.respondJson(errorJson("decision not found: $eventId"), HttpStatusCode.NotFound)
+                call.respond(HttpStatusCode.NotFound, ApiErrorResponse("decision not found: $eventId"))
             } else {
-                call.respondJson(record.toApiJsonObject().toString())
+                call.respond(record.toApiResponse())
             }
         }
     }
 }
 
-internal fun parseDecisionLookupEventId(rawEventId: String): String {
-    val eventId = rawEventId.trim()
-    require(eventId.isNotBlank()) { "event_id is required" }
-    return eventId
+internal fun parseDecisionLookupEventId(rawEventId: String): String = parseRequiredPathParameter("event_id", rawEventId)
+
+private suspend inline fun <reified T> io.ktor.server.application.ApplicationCall.receiveOptionalJsonBody(defaultValue: T): T {
+    val payload = receiveText()
+    if (payload.isBlank()) {
+        return defaultValue
+    }
+    return try {
+        apiJson.decodeFromString(payload)
+    } catch (error: IllegalArgumentException) {
+        throw ApiJsonException(error.message ?: "invalid JSON body")
+    }
+}
+
+private fun parseRequiredPathParameter(
+    name: String,
+    rawValue: String,
+): String {
+    val value = rawValue.trim()
+    if (value.isBlank()) {
+        throw ApiJsonException("$name is required")
+    }
+    return value
 }
 
 fun startAdminHttpServer(
@@ -156,22 +147,29 @@ fun startAdminHttpServer(
     )
 }.start(wait = false)
 
-private suspend fun io.ktor.server.application.ApplicationCall.respondJson(
-    payload: String,
-    status: HttpStatusCode = HttpStatusCode.OK,
-) {
-    respondText(payload, ContentType.Application.Json, status)
-}
+private fun Application.installControlsAdminApiPlugins() {
+    install(ContentNegotiation) {
+        json(apiJson)
+    }
 
-private suspend fun io.ktor.server.application.ApplicationCall.respondApiError(error: IllegalArgumentException) {
-    val status =
-        when (error) {
-            is RuleAdminException.BadRequest,
-            is ApiJsonException,
-            -> HttpStatusCode.BadRequest
-            is RuleAdminException.Conflict -> HttpStatusCode.Conflict
-            is RuleAdminException.NotFound -> HttpStatusCode.NotFound
-            else -> HttpStatusCode.BadRequest
+    install(StatusPages) {
+        exception<ApiJsonException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message.orEmpty()))
         }
-    respondJson(errorJson(error.message.orEmpty()), status)
+        exception<BadRequestException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message ?: "invalid request body"))
+        }
+        exception<JsonConvertException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message ?: "invalid JSON body"))
+        }
+        exception<RuleAdminException.BadRequest> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message.orEmpty()))
+        }
+        exception<RuleAdminException.Conflict> { call, cause ->
+            call.respond(HttpStatusCode.Conflict, ApiErrorResponse(cause.message.orEmpty()))
+        }
+        exception<RuleAdminException.NotFound> { call, cause ->
+            call.respond(HttpStatusCode.NotFound, ApiErrorResponse(cause.message.orEmpty()))
+        }
+    }
 }
