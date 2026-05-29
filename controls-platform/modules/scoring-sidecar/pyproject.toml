@@ -1,9 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "controls-scoring-sidecar"
 version = "0.1.0"
 description = "Deterministic demo scoring sidecar for the fraud controls platform"
 requires-python = ">=3.11"
 dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project.scripts]
 controls-demo-scoring-sidecar = "scoring_sidecar.demo_server:main"

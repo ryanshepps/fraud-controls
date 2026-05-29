@@ -1,12 +1,12 @@
 package com.fraudcontrols.scoring
 
 import com.fraudcontrols.features.FeatureResolver
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.Reader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
-import org.snakeyaml.engine.v2.api.Load
-import org.snakeyaml.engine.v2.api.LoadSettings
 
 data class ScoringConfig(
     val features: List<ScoringFeatureBinding>,
@@ -58,8 +58,7 @@ enum class ScorerType {
 }
 
 class ScoringConfigLoader {
-    fun load(path: Path): ScoringConfig =
-        Files.newBufferedReader(path).use(::load)
+    fun load(path: Path): ScoringConfig = Files.newBufferedReader(path).use(::load)
 
     fun load(reader: Reader): ScoringConfig {
         val root = Load(LoadSettings.builder().build()).loadFromReader(reader).asMap()
@@ -70,30 +69,27 @@ class ScoringConfigLoader {
         )
     }
 
-    private fun Map<String, Any?>.toFeatureBinding(): ScoringFeatureBinding =
-        ScoringFeatureBinding(
-            name = requiredString("name"),
-            provider = requiredString("provider"),
-            scorer = requiredString("scorer"),
-        )
+    private fun Map<String, Any?>.toFeatureBinding(): ScoringFeatureBinding = ScoringFeatureBinding(
+        name = requiredString("name"),
+        provider = requiredString("provider"),
+        scorer = requiredString("scorer"),
+    )
 
-    private fun Map<String, Any?>.toScorerDefinition(): ScorerDefinition =
-        ScorerDefinition(
-            name = requiredString("name"),
-            type = ScorerType.valueOf(requiredString("type").uppercase()),
-            primary = optionalString("primary"),
-            fallback = optionalString("fallback"),
-            shadows = optionalList("shadows").map { it.toString() },
-            timeoutMs = optionalLong("timeout_ms"),
-            sidecarAddress = optionalString("sidecar_address"),
-            modelId = optionalString("model_id"),
-            configPath = optionalString("config_path"),
-        )
+    private fun Map<String, Any?>.toScorerDefinition(): ScorerDefinition = ScorerDefinition(
+        name = requiredString("name"),
+        type = ScorerType.valueOf(requiredString("type").uppercase()),
+        primary = optionalString("primary"),
+        fallback = optionalString("fallback"),
+        shadows = optionalList("shadows").map { it.toString() },
+        timeoutMs = optionalLong("timeout_ms"),
+        sidecarAddress = optionalString("sidecar_address"),
+        modelId = optionalString("model_id"),
+        configPath = optionalString("config_path"),
+    )
 }
 
 class RuleBasedScorerConfigLoader {
-    fun load(path: Path): RuleBasedScorerConfig =
-        Files.newBufferedReader(path).use(::load)
+    fun load(path: Path): RuleBasedScorerConfig = Files.newBufferedReader(path).use(::load)
 
     fun load(reader: Reader): RuleBasedScorerConfig {
         val root = Load(LoadSettings.builder().build()).loadFromReader(reader).asMap()
@@ -104,12 +100,11 @@ class RuleBasedScorerConfigLoader {
         )
     }
 
-    private fun Map<String, Any?>.toFeatureWeight(): FeatureWeight =
-        FeatureWeight(
-            featureName = requiredString("feature"),
-            weight = requiredDouble("weight"),
-            missingValue = optionalDouble("missing_value") ?: 0.0,
-        )
+    private fun Map<String, Any?>.toFeatureWeight(): FeatureWeight = FeatureWeight(
+        featureName = requiredString("feature"),
+        weight = requiredDouble("weight"),
+        missingValue = optionalDouble("missing_value") ?: 0.0,
+    )
 }
 
 class ScorerFactory(
@@ -163,70 +158,58 @@ class ScorerFactory(
         )
     }
 
-    private fun buildXGBoost(definition: ScorerDefinition): Scorer =
-        XGBoostScorer(
-            name = definition.name,
-            modelId = definition.modelId ?: error("xgboost scorer ${definition.name} requires model_id"),
-            client = xgBoostClientFactory(definition),
-        )
+    private fun buildXGBoost(definition: ScorerDefinition): Scorer = XGBoostScorer(
+        name = definition.name,
+        modelId = definition.modelId ?: error("xgboost scorer ${definition.name} requires model_id"),
+        client = xgBoostClientFactory(definition),
+    )
 
     private fun buildShadow(
         definition: ScorerDefinition,
         buildScorer: (String) -> Scorer,
-    ): Scorer =
-        ShadowScorer(
-            name = definition.name,
-            primary = buildScorer(definition.primary ?: error("shadow scorer ${definition.name} requires primary")),
-            shadows = definition.shadows.map(buildScorer),
-            sink = shadowEvaluationSink,
-        )
+    ): Scorer = ShadowScorer(
+        name = definition.name,
+        primary = buildScorer(definition.primary ?: error("shadow scorer ${definition.name} requires primary")),
+        shadows = definition.shadows.map(buildScorer),
+        sink = shadowEvaluationSink,
+    )
 
     private fun buildFailover(
         definition: ScorerDefinition,
         buildScorer: (String) -> Scorer,
-    ): Scorer =
-        FailoverScorer(
-            name = definition.name,
-            version = definition.name,
-            primary = buildScorer(definition.primary ?: error("failover scorer ${definition.name} requires primary")),
-            fallback = buildScorer(definition.fallback ?: error("failover scorer ${definition.name} requires fallback")),
-            timeout = Duration.ofMillis(definition.timeoutMs ?: 30),
-        )
+    ): Scorer = FailoverScorer(
+        name = definition.name,
+        version = definition.name,
+        primary = buildScorer(definition.primary ?: error("failover scorer ${definition.name} requires primary")),
+        fallback = buildScorer(definition.fallback ?: error("failover scorer ${definition.name} requires fallback")),
+        timeout = Duration.ofMillis(definition.timeoutMs ?: 30),
+    )
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun Any?.asMap(): Map<String, Any?> =
-    this as? Map<String, Any?> ?: error("expected YAML object")
+private fun Any?.asMap(): Map<String, Any?> = this as? Map<String, Any?> ?: error("expected YAML object")
 
-private fun Map<String, Any?>.requiredMap(key: String): Map<String, Any?> =
-    this[key].asMap()
+private fun Map<String, Any?>.requiredMap(key: String): Map<String, Any?> = this[key].asMap()
 
-private fun Map<String, Any?>.requiredList(key: String): List<Any?> =
-    this[key] as? List<Any?>
-        ?: error("missing or invalid YAML list: $key")
+private fun Map<String, Any?>.requiredList(key: String): List<Any?> = this[key] as? List<Any?>
+    ?: error("missing or invalid YAML list: $key")
 
-private fun Map<String, Any?>.optionalList(key: String): List<Any?> =
-    this[key] as? List<Any?> ?: emptyList()
+private fun Map<String, Any?>.optionalList(key: String): List<Any?> = this[key] as? List<Any?> ?: emptyList()
 
-private fun Map<String, Any?>.requiredString(key: String): String =
-    optionalString(key) ?: error("missing required YAML string: $key")
+private fun Map<String, Any?>.requiredString(key: String): String = optionalString(key) ?: error("missing required YAML string: $key")
 
-private fun Map<String, Any?>.optionalString(key: String): String? =
-    this[key]?.toString()
+private fun Map<String, Any?>.optionalString(key: String): String? = this[key]?.toString()
 
-private fun Map<String, Any?>.optionalLong(key: String): Long? =
-    when (val value = this[key]) {
-        null -> null
-        is Number -> value.toLong()
-        else -> value.toString().toLong()
-    }
+private fun Map<String, Any?>.optionalLong(key: String): Long? = when (val value = this[key]) {
+    null -> null
+    is Number -> value.toLong()
+    else -> value.toString().toLong()
+}
 
-private fun Map<String, Any?>.requiredDouble(key: String): Double =
-    optionalDouble(key) ?: error("missing required YAML number: $key")
+private fun Map<String, Any?>.requiredDouble(key: String): Double = optionalDouble(key) ?: error("missing required YAML number: $key")
 
-private fun Map<String, Any?>.optionalDouble(key: String): Double? =
-    when (val value = this[key]) {
-        null -> null
-        is Number -> value.toDouble()
-        else -> value.toString().toDouble()
-    }
+private fun Map<String, Any?>.optionalDouble(key: String): Double? = when (val value = this[key]) {
+    null -> null
+    is Number -> value.toDouble()
+    else -> value.toString().toDouble()
+}

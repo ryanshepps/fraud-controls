@@ -28,7 +28,9 @@ class DemoScoringServerTest(unittest.TestCase):
             "is_new_counterparty": True,
         }
 
-        primary = score_transaction({k: v for k, v in payload.items() if k != "model_id"})
+        primary = score_transaction(
+            {k: v for k, v in payload.items() if k != "model_id"}
+        )
         candidate = score_transaction(payload)
 
         self.assertEqual("candidate-demo-v1", candidate["model_version"])

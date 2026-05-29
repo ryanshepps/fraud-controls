@@ -17,15 +17,15 @@ import com.fraudcontrols.rules.RuleCondition
 import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleEvaluationResult
 import com.fraudcontrols.rules.RuleEvaluator
-import java.time.Instant
-import java.util.logging.Level
-import java.util.logging.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class DecisionEngine(
     private val featureResolver: FeatureResolver,
@@ -170,13 +170,12 @@ object NoopRuleEvaluationPublisher : RuleEvaluationPublisher {
     override suspend fun publish(evaluation: RuleEvaluationResult) = Unit
 }
 
-private fun RuleCondition.featureNames(): Set<String> =
-    when (this) {
-        is RuleCondition.All -> conditions.flatMap { it.featureNames() }.toSet()
-        is RuleCondition.Any -> conditions.flatMap { it.featureNames() }.toSet()
-        is RuleCondition.Comparison -> setOf(featureName)
-        is RuleCondition.Not -> condition.featureNames()
-    }
+private fun RuleCondition.featureNames(): Set<String> = when (this) {
+    is RuleCondition.All -> conditions.flatMap { it.featureNames() }.toSet()
+    is RuleCondition.Any -> conditions.flatMap { it.featureNames() }.toSet()
+    is RuleCondition.Comparison -> setOf(featureName)
+    is RuleCondition.Not -> condition.featureNames()
+}
 
 private suspend fun FeatureResolver.resolveRuleFeatures(
     context: ScoringContext,
@@ -206,31 +205,27 @@ private suspend fun <T> timed(block: suspend () -> T): Timed<T> {
     )
 }
 
-private fun FeatureSnapshot.scoreResult(): ScoreResult =
-    when (val value = values[FraudFeatureNames.FRAUD_MODEL_SCORE]) {
-        is FeatureValue.ScoreValue -> value.result
-        is FeatureValue.Missing -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} missing: ${value.reason}")
-        is FeatureValue.Unavailable -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} unavailable: ${value.reason}")
-        null -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} was not resolved")
-        else -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} must be provided by ScorerFeatureProvider")
-    }
+private fun FeatureSnapshot.scoreResult(): ScoreResult = when (val value = values[FraudFeatureNames.FRAUD_MODEL_SCORE]) {
+    is FeatureValue.ScoreValue -> value.result
+    is FeatureValue.Missing -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} missing: ${value.reason}")
+    is FeatureValue.Unavailable -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} unavailable: ${value.reason}")
+    null -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} was not resolved")
+    else -> error("${FraudFeatureNames.FRAUD_MODEL_SCORE} must be provided by ScorerFeatureProvider")
+}
 
-private fun ScoreResult.fallbackAction(): DecisionAction =
-    when {
-        score >= HIGH_SCORE_THRESHOLD -> DecisionAction.HOLD
-        score >= MEDIUM_SCORE_THRESHOLD -> DecisionAction.CHALLENGE
-        else -> DecisionAction.ALLOW
-    }
+private fun ScoreResult.fallbackAction(): DecisionAction = when {
+    score >= HIGH_SCORE_THRESHOLD -> DecisionAction.HOLD
+    score >= MEDIUM_SCORE_THRESHOLD -> DecisionAction.CHALLENGE
+    else -> DecisionAction.ALLOW
+}
 
-private fun ScoreResult.fallbackReasonCode(): ReasonCode =
-    when {
-        score >= HIGH_SCORE_THRESHOLD -> ReasonCode("score_high")
-        score >= MEDIUM_SCORE_THRESHOLD -> ReasonCode("score_medium")
-        else -> ReasonCode("score_low")
-    }
+private fun ScoreResult.fallbackReasonCode(): ReasonCode = when {
+    score >= HIGH_SCORE_THRESHOLD -> ReasonCode("score_high")
+    score >= MEDIUM_SCORE_THRESHOLD -> ReasonCode("score_medium")
+    else -> ReasonCode("score_low")
+}
 
-private fun ResolvedRuleAction.reasonCodes(): List<ReasonCode> =
-    listOf(action.reasonCode ?: ReasonCode("rule_$ruleId"))
+private fun ResolvedRuleAction.reasonCodes(): List<ReasonCode> = listOf(action.reasonCode ?: ReasonCode("rule_$ruleId"))
 
 private const val MEDIUM_SCORE_THRESHOLD = 0.35
 private const val HIGH_SCORE_THRESHOLD = 0.70

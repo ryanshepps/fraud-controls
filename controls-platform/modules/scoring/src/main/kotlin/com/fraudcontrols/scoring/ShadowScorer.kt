@@ -61,75 +61,72 @@ class ShadowScorer(
         require(shadows.isNotEmpty()) { "shadow scorer must include at least one shadow" }
     }
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        coroutineScope {
-            val primaryResult = async { primary.score(context) }
-            val shadowResults = shadows.map { scorer ->
-                async { scorer to scorer.captureScore(context) }
-            }
-
-            val result = primaryResult.await()
-            val evaluations = buildList {
-                add(
-                    ShadowEvaluation(
-                        eventId = context.eventId,
-                        scorerName = primary.name,
-                        scorerVersion = primary.version,
-                        role = ShadowScorerRole.PRIMARY,
-                        result = result,
-                        error = null,
-                    ),
-                )
-                for (shadowResult in shadowResults) {
-                    val (scorer, scoreResult) = shadowResult.await()
-                    add(scoreResult.toEvaluation(context.eventId, scorer))
-                }
-            }
-
-            try {
-                sink.record(evaluations)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: RuntimeException) {
-                // Shadow reporting must not change the live decision path.
-            }
-
-            result
+    override suspend fun score(context: ScoringContext): ScoreResult = coroutineScope {
+        val primaryResult = async { primary.score(context) }
+        val shadowResults = shadows.map { scorer ->
+            async { scorer to scorer.captureScore(context) }
         }
+
+        val result = primaryResult.await()
+        val evaluations = buildList {
+            add(
+                ShadowEvaluation(
+                    eventId = context.eventId,
+                    scorerName = primary.name,
+                    scorerVersion = primary.version,
+                    role = ShadowScorerRole.PRIMARY,
+                    result = result,
+                    error = null,
+                ),
+            )
+            for (shadowResult in shadowResults) {
+                val (scorer, scoreResult) = shadowResult.await()
+                add(scoreResult.toEvaluation(context.eventId, scorer))
+            }
+        }
+
+        try {
+            sink.record(evaluations)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: RuntimeException) {
+            // Shadow reporting must not change the live decision path.
+        }
+
+        result
+    }
 
     private fun Result<ScoreResult>.toEvaluation(
         eventId: EventId,
         scorer: Scorer,
-    ): ShadowEvaluation =
-        fold(
-            onSuccess = {
-                ShadowEvaluation(
-                    eventId = eventId,
-                    scorerName = scorer.name,
-                    scorerVersion = scorer.version,
-                    role = ShadowScorerRole.SHADOW,
-                    result = it,
-                    error = null,
-                )
-            },
-            onFailure = {
-                ShadowEvaluation(
-                    eventId = eventId,
-                    scorerName = scorer.name,
-                    scorerVersion = scorer.version,
-                    role = ShadowScorerRole.SHADOW,
-                    result = null,
-                    error = it.message ?: it::class.simpleName ?: "unknown error",
-                )
-            },
-        )
+    ): ShadowEvaluation = fold(
+        onSuccess = {
+            ShadowEvaluation(
+                eventId = eventId,
+                scorerName = scorer.name,
+                scorerVersion = scorer.version,
+                role = ShadowScorerRole.SHADOW,
+                result = it,
+                error = null,
+            )
+        },
+        onFailure = {
+            ShadowEvaluation(
+                eventId = eventId,
+                scorerName = scorer.name,
+                scorerVersion = scorer.version,
+                role = ShadowScorerRole.SHADOW,
+                result = null,
+                error = it.message ?: it::class.simpleName ?: "unknown error",
+            )
+        },
+    )
 
-    private suspend fun Scorer.captureScore(context: ScoringContext): Result<ScoreResult> =
-        try {
-            Result.success(score(context))
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: RuntimeException) {
-            Result.failure(error)
-        }
+    private suspend fun Scorer.captureScore(context: ScoringContext): Result<ScoreResult> = try {
+        Result.success(score(context))
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: RuntimeException) {
+        Result.failure(error)
+    }
 }

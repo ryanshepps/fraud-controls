@@ -22,10 +22,10 @@ import com.fraudcontrols.scoring.Scorer
 import com.fraudcontrols.scoring.ScorerFeatureProvider
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import kotlinx.coroutines.test.runTest
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -37,11 +37,13 @@ class GrpcDecisionServiceTest {
         val store = InMemoryDecisionRecordStore()
         val service = decisionService(store = store)
 
-        val response = service.evaluate(
-            EvaluateRequest.newBuilder()
-                .setTransactionJson(sampleFraudgenEvent())
-                .build(),
-        )
+        val response =
+            service.evaluate(
+                EvaluateRequest
+                    .newBuilder()
+                    .setTransactionJson(sampleFraudgenEvent())
+                    .build(),
+            )
         val record = service.getDecision(GetDecisionRequest.newBuilder().setEventId("evt-api-1").build())
 
         assertEquals("evt-api-1", response.eventId)
@@ -59,56 +61,59 @@ class GrpcDecisionServiceTest {
 
     @Test
     fun `get decision maps missing records to not found`() = runTest {
-        val error = assertFailsWith<StatusRuntimeException> {
-            decisionService().getDecision(GetDecisionRequest.newBuilder().setEventId("missing").build())
-        }
+        val error =
+            assertFailsWith<StatusRuntimeException> {
+                decisionService().getDecision(GetDecisionRequest.newBuilder().setEventId("missing").build())
+            }
 
         assertEquals(Status.Code.NOT_FOUND, error.status.code)
     }
 
     @Test
     fun `evaluate maps malformed payloads to invalid argument`() = runTest {
-        val error = assertFailsWith<StatusRuntimeException> {
-            decisionService().evaluate(
-                EvaluateRequest.newBuilder()
-                    .setTransactionJson("""{"event_id":"evt-bad"}""")
-                    .build(),
-            )
-        }
+        val error =
+            assertFailsWith<StatusRuntimeException> {
+                decisionService().evaluate(
+                    EvaluateRequest
+                        .newBuilder()
+                        .setTransactionJson("""{"event_id":"evt-bad"}""")
+                        .build(),
+                )
+            }
 
         assertEquals(Status.Code.INVALID_ARGUMENT, error.status.code)
     }
 
-    private fun decisionService(
-        store: InMemoryDecisionRecordStore = InMemoryDecisionRecordStore(),
-    ): GrpcDecisionService =
-        GrpcDecisionService(
-            processor = DecisionProcessor(
-                engine = DecisionEngine(
-                    FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(GrpcFixedScorer(0.92))),
-                ),
-                auditSink = store,
+    private fun decisionService(store: InMemoryDecisionRecordStore = InMemoryDecisionRecordStore()): GrpcDecisionService = GrpcDecisionService(
+        processor =
+        DecisionProcessor(
+            engine =
+            DecisionEngine(
+                FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(GrpcFixedScorer(0.92))),
             ),
-            ruleSource = { listOf(modelScoreRule()) },
-            decisionRecords = store,
-            clock = Clock.fixed(Instant.parse("2026-05-26T12:00:00Z"), ZoneOffset.UTC),
-        )
+            auditSink = store,
+        ),
+        ruleSource = { listOf(modelScoreRule()) },
+        decisionRecords = store,
+        clock = Clock.fixed(Instant.parse("2026-05-26T12:00:00Z"), ZoneOffset.UTC),
+    )
 }
 
-private fun modelScoreRule(): RuleDefinition =
-    RuleDefinition(
-        id = "model-score-high",
-        version = 1,
-        condition = RuleCondition.Comparison(
-            featureName = FraudFeatureNames.FRAUD_MODEL_SCORE,
-            operator = ComparisonOperator.GTE,
-            value = RuleValue.NumberValue(0.8),
-        ),
-        action = RuleAction(
-            type = RuleActionType.BLOCK,
-            reasonCode = ReasonCode("model_score_high"),
-        ),
-    )
+private fun modelScoreRule(): RuleDefinition = RuleDefinition(
+    id = "model-score-high",
+    version = 1,
+    condition =
+    RuleCondition.Comparison(
+        featureName = FraudFeatureNames.FRAUD_MODEL_SCORE,
+        operator = ComparisonOperator.GTE,
+        value = RuleValue.NumberValue(0.8),
+    ),
+    action =
+    RuleAction(
+        type = RuleActionType.BLOCK,
+        reasonCode = ReasonCode("model_score_high"),
+    ),
+)
 
 private fun sampleFraudgenEvent(eventId: String = "evt-api-1"): String =
     """
@@ -138,12 +143,11 @@ private class GrpcFixedScorer(
     override val name: String = "fixed"
     override val version: String = "fixed-v1"
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = null,
-            contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
-            modelVersion = version,
-            latencyMs = 1.0,
-        )
+    override suspend fun score(context: ScoringContext): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = null,
+        contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
+        modelVersion = version,
+        latencyMs = 1.0,
+    )
 }

@@ -8,10 +8,10 @@ import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.rules.decisionAction
 import com.fraudcontrols.scoring.ShadowEvaluation
 import com.fraudcontrols.scoring.ShadowScorerRole
-import kotlin.math.abs
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.math.abs
 
 class ShadowEvaluationReporter(
     private val metrics: ControlsMetrics,
@@ -153,48 +153,43 @@ private class RollingAverage(
         }
     }
 
-    fun average(): Double =
-        if (values.isEmpty()) 0.0 else sum / values.size
+    fun average(): Double = if (values.isEmpty()) 0.0 else sum / values.size
 }
 
-private fun RuleEvaluationResult.toRuleEvaluationObservation(): RuleEvaluationObservation =
-    RuleEvaluationObservation(
-        matches = matches.map {
-            RuleMatchObservation(
-                ruleId = it.ruleId,
-                mode = it.mode,
-                decisionAction = it.action.decisionAction(),
-            )
-        },
-        resolvedAction = resolvedAction?.decisionAction,
-    )
+private fun RuleEvaluationResult.toRuleEvaluationObservation(): RuleEvaluationObservation = RuleEvaluationObservation(
+    matches = matches.map {
+        RuleMatchObservation(
+            ruleId = it.ruleId,
+            mode = it.mode,
+            decisionAction = it.action.decisionAction(),
+        )
+    },
+    resolvedAction = resolvedAction?.decisionAction,
+)
 
-private fun kotlinx.serialization.json.JsonObject.toRuleEvaluationObservation(): RuleEvaluationObservation =
-    RuleEvaluationObservation(
-        matches = this["matches"]?.jsonArray.orEmpty().map { element ->
-            val match = element.jsonObject
-            RuleMatchObservation(
-                ruleId = match.requiredString("rule_id"),
-                mode = RuleMode.valueOf(match.requiredString("mode")),
-                decisionAction = RuleActionType.valueOf(match.requiredString("action_type")).decisionAction(),
-            )
-        },
-        resolvedAction = this["resolved_action"]?.jsonObject
-            ?.requiredString("decision_action")
-            ?.let(DecisionAction::valueOf),
-    )
+private fun kotlinx.serialization.json.JsonObject.toRuleEvaluationObservation(): RuleEvaluationObservation = RuleEvaluationObservation(
+    matches = this["matches"]?.jsonArray.orEmpty().map { element ->
+        val match = element.jsonObject
+        RuleMatchObservation(
+            ruleId = match.requiredString("rule_id"),
+            mode = RuleMode.valueOf(match.requiredString("mode")),
+            decisionAction = RuleActionType.valueOf(match.requiredString("action_type")).decisionAction(),
+        )
+    },
+    resolvedAction = this["resolved_action"]?.jsonObject
+        ?.requiredString("decision_action")
+        ?.let(DecisionAction::valueOf),
+)
 
-private fun kotlinx.serialization.json.JsonObject.requiredString(name: String): String =
-    this[name]?.jsonPrimitive?.content ?: error("missing required field: $name")
+private fun kotlinx.serialization.json.JsonObject.requiredString(name: String): String = this[name]?.jsonPrimitive?.content ?: error("missing required field: $name")
 
-private fun RuleActionType.decisionAction(): DecisionAction? =
-    when (this) {
-        RuleActionType.ALLOW -> DecisionAction.ALLOW
-        RuleActionType.BLOCK -> DecisionAction.DENY
-        RuleActionType.CHALLENGE -> DecisionAction.CHALLENGE
-        RuleActionType.REVIEW_QUEUE -> DecisionAction.HOLD
-        RuleActionType.TAG -> null
-    }
+private fun RuleActionType.decisionAction(): DecisionAction? = when (this) {
+    RuleActionType.ALLOW -> DecisionAction.ALLOW
+    RuleActionType.BLOCK -> DecisionAction.DENY
+    RuleActionType.CHALLENGE -> DecisionAction.CHALLENGE
+    RuleActionType.REVIEW_QUEUE -> DecisionAction.HOLD
+    RuleActionType.TAG -> null
+}
 
 private val blockingActions = setOf(
     DecisionAction.CHALLENGE,

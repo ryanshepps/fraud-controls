@@ -5,11 +5,11 @@ import com.fraudcontrols.core.Factor
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.scoring.ShadowEvaluation
 import com.fraudcontrols.scoring.ShadowScorerRole
-import java.time.Duration
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.MockConsumer
 import org.apache.kafka.clients.consumer.OffsetResetStrategy
 import org.apache.kafka.common.TopicPartition
+import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -81,19 +81,18 @@ class KafkaShadowEvaluationReporterConsumerTest {
         scorerName: String,
         role: ShadowScorerRole,
         score: Double,
-    ): ShadowEvaluation =
-        ShadowEvaluation(
-            eventId = EventId("evt-1"),
-            scorerName = scorerName,
-            scorerVersion = "v1",
-            role = role,
-            result = ScoreResult(
-                score = score,
-                rawScore = null,
-                contributingFactors = listOf(Factor("fixed", score)),
-                modelVersion = "v1",
-                latencyMs = 1.0,
-            ),
-            error = null,
-        )
+    ): ShadowEvaluation = ShadowEvaluation(
+        eventId = EventId("evt-1"),
+        scorerName = scorerName,
+        scorerVersion = "v1",
+        role = role,
+        result = ScoreResult(
+            score = score,
+            rawScore = null,
+            contributingFactors = listOf(Factor("fixed", score)),
+            modelVersion = "v1",
+            latencyMs = 1.0,
+        ),
+        error = null,
+    )
 }

@@ -23,14 +23,6 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
-import java.net.URI
-import java.time.Instant
-import java.util.UUID
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.wait.strategy.Wait
@@ -45,6 +37,14 @@ import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.KeyType
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
+import java.net.URI
+import java.time.Instant
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class DynamoDecisionAuditLookupIntegrationTest {
     @Test
@@ -167,14 +167,13 @@ class DynamoDecisionAuditLookupIntegrationTest {
         dynamoClient.waiter().waitUntilTableExists { it.tableName(tableName) }
     }
 
-    private fun dynamoClient(container: GenericContainer<*>): DynamoDbClient =
-        DynamoDbClient.builder()
-            .endpointOverride(URI.create("http://${container.host}:${container.getMappedPort(8000)}"))
-            .region(Region.US_EAST_1)
-            .credentialsProvider(
-                StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
-            )
-            .build()
+    private fun dynamoClient(container: GenericContainer<*>): DynamoDbClient = DynamoDbClient.builder()
+        .endpointOverride(URI.create("http://${container.host}:${container.getMappedPort(8000)}"))
+        .region(Region.US_EAST_1)
+        .credentialsProvider(
+            StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
+        )
+        .build()
 }
 
 private fun sampleFraudgenEvent(eventId: String): String =
@@ -205,12 +204,11 @@ private class FixedLookupScorer(
     override val name: String = "fixed"
     override val version: String = "fixed-v1"
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = null,
-            contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
-            modelVersion = version,
-            latencyMs = 1.0,
-        )
+    override suspend fun score(context: ScoringContext): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = null,
+        contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
+        modelVersion = version,
+        latencyMs = 1.0,
+    )
 }

@@ -7,10 +7,6 @@ import com.fraudcontrols.core.GeoPoint
 import com.fraudcontrols.core.Money
 import com.fraudcontrols.core.TransactionEvent
 import com.fraudcontrols.core.TransactionType
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.time.OffsetDateTime
-import java.util.Currency
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -19,6 +15,10 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.OffsetDateTime
+import java.util.Currency
 
 class FraudgenEventParser(
     private val json: Json = Json,
@@ -59,15 +59,14 @@ class FraudgenEventParser(
         }
     }
 
-    private fun parseTransactionType(rawType: String): TransactionType =
-        when (rawType) {
-            "p2p_send" -> TransactionType.P2P_SEND
-            "p2p_payment" -> TransactionType.P2P_PAYMENT
-            "cash_out" -> TransactionType.CASH_OUT
-            "card_payment" -> TransactionType.CARD_PAYMENT
-            "bank_transfer" -> TransactionType.BANK_TRANSFER
-            else -> throw FraudgenEventParseException("unsupported transaction type: $rawType")
-        }
+    private fun parseTransactionType(rawType: String): TransactionType = when (rawType) {
+        "p2p_send" -> TransactionType.P2P_SEND
+        "p2p_payment" -> TransactionType.P2P_PAYMENT
+        "cash_out" -> TransactionType.CASH_OUT
+        "card_payment" -> TransactionType.CARD_PAYMENT
+        "bank_transfer" -> TransactionType.BANK_TRANSFER
+        else -> throw FraudgenEventParseException("unsupported transaction type: $rawType")
+    }
 }
 
 class FraudgenEventParseException(
@@ -75,12 +74,10 @@ class FraudgenEventParseException(
     cause: Throwable? = null,
 ) : IllegalArgumentException(message, cause)
 
-private fun JsonObject.required(name: String): JsonElement =
-    this[name] ?: throw FraudgenEventParseException("missing required field: $name")
+private fun JsonObject.required(name: String): JsonElement = this[name] ?: throw FraudgenEventParseException("missing required field: $name")
 
-private fun JsonObject.requiredObject(name: String): JsonObject =
-    required(name) as? JsonObject
-        ?: throw FraudgenEventParseException("field $name must be an object")
+private fun JsonObject.requiredObject(name: String): JsonObject = required(name) as? JsonObject
+    ?: throw FraudgenEventParseException("field $name must be an object")
 
 private fun JsonObject.requiredString(name: String): String {
     val primitive = requiredPrimitive(name)
@@ -100,9 +97,8 @@ private fun JsonObject.requiredDouble(name: String): Double {
     return value
 }
 
-private fun JsonObject.requiredBoolean(name: String): Boolean =
-    requiredPrimitive(name).booleanOrNull
-        ?: throw FraudgenEventParseException("field $name must be a boolean")
+private fun JsonObject.requiredBoolean(name: String): Boolean = requiredPrimitive(name).booleanOrNull
+    ?: throw FraudgenEventParseException("field $name must be a boolean")
 
 private fun JsonObject.requiredGeoPoint(name: String): GeoPoint {
     val geo = requiredObject(name)
@@ -123,5 +119,4 @@ private fun JsonObject.requiredCents(name: String): BigDecimal {
     }
 }
 
-private fun JsonObject.requiredPrimitive(name: String): JsonPrimitive =
-    required(name).jsonPrimitive
+private fun JsonObject.requiredPrimitive(name: String): JsonPrimitive = required(name).jsonPrimitive

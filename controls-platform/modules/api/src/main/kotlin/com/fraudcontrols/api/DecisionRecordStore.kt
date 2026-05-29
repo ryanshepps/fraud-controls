@@ -28,8 +28,7 @@ class InMemoryDecisionRecordStore(
         }
     }
 
-    override suspend fun find(eventId: EventId): DecisionAuditRowContract? =
-        mutex.withLock {
-            records[eventId]?.toDecisionAuditRowContract()
-        }
+    override suspend fun find(eventId: EventId): DecisionAuditRowContract? = mutex.withLock {
+        records[eventId]?.toDecisionAuditRowContract()
+    }
 }

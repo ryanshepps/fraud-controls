@@ -45,42 +45,41 @@ class SenderVelocityFeatureProvider(
     }
 }
 
-fun defaultVelocityFeatureProviders(store: VelocityFeatureStore): List<FeatureProvider> =
-    listOf(
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_COUNT_5M,
-            metric = VelocityMetric.SEND_COUNT,
-            window = VelocityWindow(Duration.ofMinutes(5)),
-            store = store,
-        ),
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_COUNT_1H,
-            metric = VelocityMetric.SEND_COUNT,
-            window = VelocityWindow(Duration.ofHours(1)),
-            store = store,
-        ),
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_COUNT_24H,
-            metric = VelocityMetric.SEND_COUNT,
-            window = VelocityWindow(Duration.ofHours(24)),
-            store = store,
-        ),
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_5M,
-            metric = VelocityMetric.SEND_AMOUNT_SUM,
-            window = VelocityWindow(Duration.ofMinutes(5)),
-            store = store,
-        ),
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_1H,
-            metric = VelocityMetric.SEND_AMOUNT_SUM,
-            window = VelocityWindow(Duration.ofHours(1)),
-            store = store,
-        ),
-        SenderVelocityFeatureProvider(
-            featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_24H,
-            metric = VelocityMetric.SEND_AMOUNT_SUM,
-            window = VelocityWindow(Duration.ofHours(24)),
-            store = store,
-        ),
-    )
+fun defaultVelocityFeatureProviders(store: VelocityFeatureStore): List<FeatureProvider> = listOf(
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_COUNT_5M,
+        metric = VelocityMetric.SEND_COUNT,
+        window = VelocityWindow(Duration.ofMinutes(5)),
+        store = store,
+    ),
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_COUNT_1H,
+        metric = VelocityMetric.SEND_COUNT,
+        window = VelocityWindow(Duration.ofHours(1)),
+        store = store,
+    ),
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_COUNT_24H,
+        metric = VelocityMetric.SEND_COUNT,
+        window = VelocityWindow(Duration.ofHours(24)),
+        store = store,
+    ),
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_5M,
+        metric = VelocityMetric.SEND_AMOUNT_SUM,
+        window = VelocityWindow(Duration.ofMinutes(5)),
+        store = store,
+    ),
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_1H,
+        metric = VelocityMetric.SEND_AMOUNT_SUM,
+        window = VelocityWindow(Duration.ofHours(1)),
+        store = store,
+    ),
+    SenderVelocityFeatureProvider(
+        featureName = FraudFeatureNames.SENDER_SEND_AMOUNT_SUM_24H,
+        metric = VelocityMetric.SEND_AMOUNT_SUM,
+        window = VelocityWindow(Duration.ofHours(24)),
+        store = store,
+    ),
+)
