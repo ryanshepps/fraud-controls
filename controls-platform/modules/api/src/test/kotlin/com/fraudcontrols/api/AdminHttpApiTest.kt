@@ -18,13 +18,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.apache.kafka.clients.producer.MockProducer
 import org.apache.kafka.common.serialization.StringSerializer
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -43,22 +43,26 @@ class AdminHttpApiTest {
             )
         }
 
-        val create = client.post("/rules") {
-            contentType(ContentType.Application.Json)
-            setBody(ruleJson(id = "shadow-score", mode = "shadow", actor = "risk-admin"))
-        }
-        val update = client.put("/rules/shadow-score") {
-            contentType(ContentType.Application.Json)
-            setBody(ruleJson(id = "ignored", mode = "shadow", actor = "risk-admin", priority = 200))
-        }
-        val promote = client.post("/rules/shadow-score/promote") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"actor":"risk-admin","confirm":true}""")
-        }
-        val disable = client.post("/rules/shadow-score/disable") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"actor":"risk-admin"}""")
-        }
+        val create =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody(ruleJson(id = "shadow-score", mode = "shadow", actor = "risk-admin"))
+            }
+        val update =
+            client.put("/rules/shadow-score") {
+                contentType(ContentType.Application.Json)
+                setBody(ruleJson(id = "ignored", mode = "shadow", actor = "risk-admin", priority = 200))
+            }
+        val promote =
+            client.post("/rules/shadow-score/promote") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"actor":"risk-admin","confirm":true}""")
+            }
+        val disable =
+            client.post("/rules/shadow-score/disable") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"actor":"risk-admin"}""")
+            }
         val history = client.get("/rules/shadow-score/history")
         val list = client.get("/rules")
 
@@ -79,7 +83,13 @@ class AdminHttpApiTest {
         )
         assertTrue(audit.events().all { it.actor == "risk-admin" })
         assertTrue(audit.events().all { it.occurredAt == Instant.parse("2026-05-26T12:00:00Z") })
-        assertTrue(audit.events().last().diff.containsKey("enabled"))
+        assertTrue(
+            audit
+                .events()
+                .last()
+                .diff
+                .containsKey("enabled"),
+        )
     }
 
     @Test
@@ -91,10 +101,11 @@ class AdminHttpApiTest {
             )
         }
 
-        val badRule = client.post("/rules") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"id":"bad"}""")
-        }
+        val badRule =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"id":"bad"}""")
+            }
         val missingDecision = client.get("/decisions/missing")
 
         assertEquals(HttpStatusCode.BadRequest, badRule.status)
@@ -106,12 +117,16 @@ class AdminHttpApiTest {
         val store = InMemoryDecisionRecordStore()
         runBlocking {
             DecisionProcessor(
-                engine = DecisionEngine(
+                engine =
+                DecisionEngine(
                     FeatureResolver(defaultEventFeatureProviders() + ScorerFeatureProvider(AdminFixedScorer(0.42))),
                 ),
                 auditSink = store,
             ).process(
-                event = com.fraudcontrols.streaming.FraudgenEventParser().parse(sampleFraudgenEvent("evt-http-1")),
+                event =
+                com.fraudcontrols.streaming
+                    .FraudgenEventParser()
+                    .parse(sampleFraudgenEvent("evt-http-1")),
                 rules = emptyList(),
                 decidedAt = Instant.parse("2026-05-26T12:00:00Z"),
             )
@@ -140,10 +155,11 @@ class AdminHttpApiTest {
             )
         }
 
-        val response = client.post("/admin/global-kill") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"actor":"ops"}""")
-        }
+        val response =
+            client.post("/admin/global-kill") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"actor":"ops"}""")
+            }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -241,12 +257,11 @@ private class AdminFixedScorer(
     override val name: String = "fixed"
     override val version: String = "fixed-v1"
 
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = null,
-            contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
-            modelVersion = version,
-            latencyMs = 1.0,
-        )
+    override suspend fun score(context: ScoringContext): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = null,
+        contributingFactors = listOf(Factor(name = "fixed", contribution = score)),
+        modelVersion = version,
+        latencyMs = 1.0,
+    )
 }

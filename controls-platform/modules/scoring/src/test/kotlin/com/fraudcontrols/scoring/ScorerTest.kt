@@ -14,15 +14,15 @@ import com.fraudcontrols.core.TransactionType
 import com.fraudcontrols.features.FeatureResolver
 import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.features.defaultEventFeatureProviders
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runTest
 import java.io.StringReader
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.currentTime
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -270,14 +270,13 @@ private class FixedScorer(
     override val version: String,
     private val score: Double,
 ) : Scorer {
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        ScoreResult(
-            score = score,
-            rawScore = score,
-            contributingFactors = emptyList(),
-            modelVersion = version,
-            latencyMs = 0.0,
-        )
+    override suspend fun score(context: ScoringContext): ScoreResult = ScoreResult(
+        score = score,
+        rawScore = score,
+        contributingFactors = emptyList(),
+        modelVersion = version,
+        latencyMs = 0.0,
+    )
 }
 
 private class DelayedScorer(
@@ -302,16 +301,14 @@ private class FailingScorer(
     override val name: String,
     override val version: String,
 ) : Scorer {
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        error("$name failed")
+    override suspend fun score(context: ScoringContext): ScoreResult = error("$name failed")
 }
 
 private class CancellingScorer(
     override val name: String,
     override val version: String,
 ) : Scorer {
-    override suspend fun score(context: ScoringContext): ScoreResult =
-        throw CancellationException("$name cancelled")
+    override suspend fun score(context: ScoringContext): ScoreResult = throw CancellationException("$name cancelled")
 }
 
 private class RecordingShadowSink : ShadowEvaluationSink {
@@ -322,24 +319,23 @@ private class RecordingShadowSink : ShadowEvaluationSink {
     }
 }
 
-private fun sampleEvent(): TransactionEvent =
-    TransactionEvent(
-        eventId = EventId("evt-1"),
-        timestamp = Instant.parse("2026-01-01T00:00:00Z"),
-        senderId = CustomerId("sender-1"),
-        recipientId = CustomerId("recipient-1"),
-        amount = Money.usd("25.00"),
-        transactionType = TransactionType.P2P_SEND,
-        senderDeviceFingerprint = DeviceFingerprint("device-1"),
-        senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
-        senderBalanceBefore = BigDecimal("100.00"),
-        senderBalanceAfter = BigDecimal("75.00"),
-        recipientBalanceBefore = BigDecimal("50.00"),
-        recipientBalanceAfter = BigDecimal("75.00"),
-        senderAccountAgeDays = 0.125,
-        recipientAccountAgeDays = 120.5,
-        isNewCounterparty = true,
-    )
+private fun sampleEvent(): TransactionEvent = TransactionEvent(
+    eventId = EventId("evt-1"),
+    timestamp = Instant.parse("2026-01-01T00:00:00Z"),
+    senderId = CustomerId("sender-1"),
+    recipientId = CustomerId("recipient-1"),
+    amount = Money.usd("25.00"),
+    transactionType = TransactionType.P2P_SEND,
+    senderDeviceFingerprint = DeviceFingerprint("device-1"),
+    senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
+    senderBalanceBefore = BigDecimal("100.00"),
+    senderBalanceAfter = BigDecimal("75.00"),
+    recipientBalanceBefore = BigDecimal("50.00"),
+    recipientBalanceAfter = BigDecimal("75.00"),
+    senderAccountAgeDays = 0.125,
+    recipientAccountAgeDays = 120.5,
+    isNewCounterparty = true,
+)
 
 private fun Double.roundTo(places: Int): Double {
     val scale = Math.pow(10.0, places.toDouble())

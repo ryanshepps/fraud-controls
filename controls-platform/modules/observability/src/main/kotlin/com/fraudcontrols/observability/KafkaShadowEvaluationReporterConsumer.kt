@@ -1,11 +1,11 @@
 package com.fraudcontrols.observability
 
-import java.time.Duration
-import java.util.Properties
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
+import java.time.Duration
+import java.util.Properties
 
 class KafkaShadowEvaluationReporterConsumer(
     private val consumer: Consumer<String, String>,

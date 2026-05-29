@@ -1,17 +1,16 @@
 package com.fraudcontrols.rules
 
 import com.fraudcontrols.core.ReasonCode
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.Reader
 import java.nio.file.Files
 import java.nio.file.Path
-import org.snakeyaml.engine.v2.api.Load
-import org.snakeyaml.engine.v2.api.LoadSettings
 
 class RuleConfigLoader {
     private val yaml = Load(LoadSettings.builder().build())
 
-    fun load(path: Path): RuleSet =
-        Files.newBufferedReader(path).use(::load)
+    fun load(path: Path): RuleSet = Files.newBufferedReader(path).use(::load)
 
     fun load(reader: Reader): RuleSet {
         val root = yaml.loadFromReader(reader).asMap("root")
@@ -44,18 +43,17 @@ class RuleConfigLoader {
     private fun parseCondition(
         raw: Map<String, Any?>,
         path: String,
-    ): RuleCondition =
-        when {
-            raw.containsKey("all") -> RuleCondition.All(parseConditionList(raw.requiredList("all"), "$path.all"))
-            raw.containsKey("any") -> RuleCondition.Any(parseConditionList(raw.requiredList("any"), "$path.any"))
-            raw.containsKey("not") -> RuleCondition.Not(parseCondition(raw.requiredMap("not"), "$path.not"))
-            raw.containsKey("feature") -> RuleCondition.Comparison(
-                featureName = raw.requiredString("feature"),
-                operator = raw.requiredString("op").toComparisonOperator(),
-                value = parseRuleValue(raw["value"] ?: throw RuleConfigException("$path.value is required")),
-            )
-            else -> throw RuleConfigException("$path must contain all, any, not, or feature")
-        }
+    ): RuleCondition = when {
+        raw.containsKey("all") -> RuleCondition.All(parseConditionList(raw.requiredList("all"), "$path.all"))
+        raw.containsKey("any") -> RuleCondition.Any(parseConditionList(raw.requiredList("any"), "$path.any"))
+        raw.containsKey("not") -> RuleCondition.Not(parseCondition(raw.requiredMap("not"), "$path.not"))
+        raw.containsKey("feature") -> RuleCondition.Comparison(
+            featureName = raw.requiredString("feature"),
+            operator = raw.requiredString("op").toComparisonOperator(),
+            value = parseRuleValue(raw["value"] ?: throw RuleConfigException("$path.value is required")),
+        )
+        else -> throw RuleConfigException("$path must contain all, any, not, or feature")
+    }
 
     private fun parseConditionList(
         raw: List<Any?>,
@@ -80,71 +78,62 @@ class RuleConfigLoader {
         )
     }
 
-    private fun parseRuleValue(raw: Any?): RuleValue =
-        when (raw) {
-            is Boolean -> RuleValue.BooleanValue(raw)
-            is Int -> RuleValue.NumberValue(raw.toDouble())
-            is Long -> RuleValue.NumberValue(raw.toDouble())
-            is Double -> RuleValue.NumberValue(raw)
-            is Float -> RuleValue.NumberValue(raw.toDouble())
-            is Number -> RuleValue.NumberValue(raw.toDouble())
-            is String -> RuleValue.TextValue(raw)
-            is List<*> -> RuleValue.SetValue(raw.map(::parseRuleValue).toSet())
-            else -> throw RuleConfigException("unsupported rule value: ${raw?.let { it::class.simpleName } ?: "null"}")
-        }
+    private fun parseRuleValue(raw: Any?): RuleValue = when (raw) {
+        is Boolean -> RuleValue.BooleanValue(raw)
+        is Int -> RuleValue.NumberValue(raw.toDouble())
+        is Long -> RuleValue.NumberValue(raw.toDouble())
+        is Double -> RuleValue.NumberValue(raw)
+        is Float -> RuleValue.NumberValue(raw.toDouble())
+        is Number -> RuleValue.NumberValue(raw.toDouble())
+        is String -> RuleValue.TextValue(raw)
+        is List<*> -> RuleValue.SetValue(raw.map(::parseRuleValue).toSet())
+        else -> throw RuleConfigException("unsupported rule value: ${raw?.let { it::class.simpleName } ?: "null"}")
+    }
 
-    private fun String.toRuleMode(): RuleMode =
-        when (this) {
-            "shadow" -> RuleMode.SHADOW
-            "enforce" -> RuleMode.ENFORCE
-            "disabled" -> RuleMode.DISABLED
-            else -> throw RuleConfigException("unsupported rule mode: $this")
-        }
+    private fun String.toRuleMode(): RuleMode = when (this) {
+        "shadow" -> RuleMode.SHADOW
+        "enforce" -> RuleMode.ENFORCE
+        "disabled" -> RuleMode.DISABLED
+        else -> throw RuleConfigException("unsupported rule mode: $this")
+    }
 
-    private fun String.toComparisonOperator(): ComparisonOperator =
-        when (this) {
-            "eq" -> ComparisonOperator.EQ
-            "neq" -> ComparisonOperator.NEQ
-            "lt" -> ComparisonOperator.LT
-            "lte" -> ComparisonOperator.LTE
-            "gt" -> ComparisonOperator.GT
-            "gte" -> ComparisonOperator.GTE
-            "in" -> ComparisonOperator.IN
-            "not_in" -> ComparisonOperator.NOT_IN
-            else -> throw RuleConfigException("unsupported comparison operator: $this")
-        }
+    private fun String.toComparisonOperator(): ComparisonOperator = when (this) {
+        "eq" -> ComparisonOperator.EQ
+        "neq" -> ComparisonOperator.NEQ
+        "lt" -> ComparisonOperator.LT
+        "lte" -> ComparisonOperator.LTE
+        "gt" -> ComparisonOperator.GT
+        "gte" -> ComparisonOperator.GTE
+        "in" -> ComparisonOperator.IN
+        "not_in" -> ComparisonOperator.NOT_IN
+        else -> throw RuleConfigException("unsupported comparison operator: $this")
+    }
 
-    private fun String.toRuleActionType(): RuleActionType =
-        when (this) {
-            "allow" -> RuleActionType.ALLOW
-            "block" -> RuleActionType.BLOCK
-            "challenge" -> RuleActionType.CHALLENGE
-            "review_queue" -> RuleActionType.REVIEW_QUEUE
-            "tag" -> RuleActionType.TAG
-            else -> throw RuleConfigException("unsupported rule action type: $this")
-        }
+    private fun String.toRuleActionType(): RuleActionType = when (this) {
+        "allow" -> RuleActionType.ALLOW
+        "block" -> RuleActionType.BLOCK
+        "challenge" -> RuleActionType.CHALLENGE
+        "review_queue" -> RuleActionType.REVIEW_QUEUE
+        "tag" -> RuleActionType.TAG
+        else -> throw RuleConfigException("unsupported rule action type: $this")
+    }
 }
 
 class RuleConfigException(message: String) : IllegalArgumentException(message)
 
-private fun Any?.asMap(path: String): Map<String, Any?> =
-    (this as? Map<*, *>)
-        ?.mapKeys { (key, _) ->
-            key as? String ?: throw RuleConfigException("$path keys must be strings")
-        }
-        ?: throw RuleConfigException("$path must be an object")
+private fun Any?.asMap(path: String): Map<String, Any?> = (this as? Map<*, *>)
+    ?.mapKeys { (key, _) ->
+        key as? String ?: throw RuleConfigException("$path keys must be strings")
+    }
+    ?: throw RuleConfigException("$path must be an object")
 
-private fun Map<String, Any?>.requiredMap(name: String): Map<String, Any?> =
-    this[name].asMap(name)
+private fun Map<String, Any?>.requiredMap(name: String): Map<String, Any?> = this[name].asMap(name)
 
-private fun Map<String, Any?>.requiredList(name: String): List<Any?> =
-    this[name] as? List<Any?> ?: throw RuleConfigException("$name must be a list")
+private fun Map<String, Any?>.requiredList(name: String): List<Any?> = this[name] as? List<Any?> ?: throw RuleConfigException("$name must be a list")
 
-private fun Map<String, Any?>.list(name: String): List<Any?>? =
-    this[name] as? List<Any?>
+private fun Map<String, Any?>.list(name: String): List<Any?>? = this[name] as? List<Any?>
 
-private fun Map<String, Any?>.requiredString(name: String): String =
-    string(name) ?: throw RuleConfigException("$name is required")
+private fun Map<String, Any?>.requiredString(name: String): String = string(name) ?: throw RuleConfigException("$name is required")
 
 private fun Map<String, Any?>.string(name: String): String? {
     val value = this[name] ?: return null

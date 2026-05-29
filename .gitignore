@@ -3,5 +3,9 @@ __pycache__/
 .pytest_cache/
 fraudgencli/.venv/
 fraudgencli/src/*.egg-info/
+fraudgencli/build/
+fraudgencli/dist/
 fraudgencli/out/
 controls-platform/**/build/
+controls-platform/modules/scoring-sidecar/dist/
+controls-platform/modules/scoring-sidecar/src/*.egg-info/

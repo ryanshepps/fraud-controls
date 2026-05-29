@@ -3,13 +3,13 @@ package com.fraudcontrols.streaming
 import com.fraudcontrols.core.TransactionEvent
 import com.fraudcontrols.decisioning.DecisionProcessor
 import com.fraudcontrols.rules.RuleDefinition
-import java.time.Clock
-import java.time.Duration
-import java.util.Properties
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
+import java.time.Clock
+import java.time.Duration
+import java.util.Properties
 
 class KafkaTransactionDecisionConsumer(
     private val consumer: Consumer<String, String>,
@@ -41,14 +41,13 @@ fun kafkaStringConsumer(
     bootstrapServers: String,
     groupId: String,
     topics: Collection<String>,
-): KafkaConsumer<String, String> =
-    KafkaConsumer<String, String>(
-        Properties().apply {
-            put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-            put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-            put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-            put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-            put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-            put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-        },
-    ).also { it.subscribe(topics) }
+): KafkaConsumer<String, String> = KafkaConsumer<String, String>(
+    Properties().apply {
+        put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+        put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+        put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+        put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+        put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+        put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    },
+).also { it.subscribe(topics) }

@@ -108,8 +108,7 @@ class FeatureResolverTest {
     private class FailingProvider(
         override val featureName: String,
     ) : FeatureProvider {
-        override suspend fun compute(context: ScoringContext): FeatureValue =
-            error("store timeout")
+        override suspend fun compute(context: ScoringContext): FeatureValue = error("store timeout")
     }
 }
 
@@ -225,8 +224,7 @@ private class RecordingAccountStore(
     private val states: Map<CustomerId, AccountState> = emptyMap(),
     private val isNewCounterparty: Boolean? = null,
 ) : AccountStateStore {
-    override suspend fun accountState(customerId: CustomerId): AccountState? =
-        states[customerId]
+    override suspend fun accountState(customerId: CustomerId): AccountState? = states[customerId]
 
     override suspend fun isNewCounterparty(
         senderId: CustomerId,
@@ -270,24 +268,23 @@ private object FeatureContextAssertions {
 private fun sampleEvent(
     senderBalanceBefore: BigDecimal = BigDecimal("100.00"),
     senderBalanceAfter: BigDecimal = BigDecimal("75.00"),
-): TransactionEvent =
-    TransactionEvent(
-        eventId = EventId("evt-1"),
-        timestamp = Instant.parse("2026-01-01T00:00:00Z"),
-        senderId = CustomerId("sender-1"),
-        recipientId = CustomerId("recipient-1"),
-        amount = Money.usd("25.00"),
-        transactionType = TransactionType.P2P_SEND,
-        senderDeviceFingerprint = DeviceFingerprint("device-1"),
-        senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
-        senderBalanceBefore = senderBalanceBefore,
-        senderBalanceAfter = senderBalanceAfter,
-        recipientBalanceBefore = BigDecimal("50.00"),
-        recipientBalanceAfter = BigDecimal("75.00"),
-        senderAccountAgeDays = 0.125,
-        recipientAccountAgeDays = 120.5,
-        isNewCounterparty = true,
-    )
+): TransactionEvent = TransactionEvent(
+    eventId = EventId("evt-1"),
+    timestamp = Instant.parse("2026-01-01T00:00:00Z"),
+    senderId = CustomerId("sender-1"),
+    recipientId = CustomerId("recipient-1"),
+    amount = Money.usd("25.00"),
+    transactionType = TransactionType.P2P_SEND,
+    senderDeviceFingerprint = DeviceFingerprint("device-1"),
+    senderGeo = GeoPoint(latitude = 43.6532, longitude = -79.3832),
+    senderBalanceBefore = senderBalanceBefore,
+    senderBalanceAfter = senderBalanceAfter,
+    recipientBalanceBefore = BigDecimal("50.00"),
+    recipientBalanceAfter = BigDecimal("75.00"),
+    senderAccountAgeDays = 0.125,
+    recipientAccountAgeDays = 120.5,
+    isNewCounterparty = true,
+)
 
 private fun <T> runSuspending(block: suspend () -> T): T {
     var value: T? = null

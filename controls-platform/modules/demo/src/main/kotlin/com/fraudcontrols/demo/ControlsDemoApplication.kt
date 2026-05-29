@@ -30,12 +30,6 @@ import com.fraudcontrols.streaming.KafkaRuleEvaluationPublisher
 import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
 import com.fraudcontrols.streaming.kafkaStringConsumer
 import com.fraudcontrols.streaming.kafkaStringProducer
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
-import java.util.Properties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -65,6 +59,12 @@ import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.KeyType
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+import java.util.Properties
 
 fun main() {
     runBlocking {
@@ -204,40 +204,37 @@ private class HttpXGBoostScoreClient(
     override suspend fun score(
         context: ScoringContext,
         modelId: String,
-    ): XGBoostScoreResponse =
-        withContext(Dispatchers.IO) {
-            val request = HttpRequest.newBuilder(URI.create(endpoint))
-                .timeout(Duration.ofSeconds(5))
-                .header("content-type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(context.event.toScoreJson(modelId)))
-                .build()
-            val startedAt = System.nanoTime()
-            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-            require(response.statusCode() in 200..299) {
-                "demo scoring sidecar returned HTTP ${response.statusCode()}"
-            }
-            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000.0
-            val payload = Json.parseToJsonElement(response.body()).jsonObject
-            XGBoostScoreResponse(
-                rawScore = payload.requiredDouble("raw_score"),
-                shapValues = payload["shap_values"]?.jsonObject.orEmpty().mapValues { (_, value) ->
-                    value.jsonPrimitive.doubleOrNull ?: 0.0
-                } + mapOf("sidecar_latency_ms" to elapsedMs),
-            )
+    ): XGBoostScoreResponse = withContext(Dispatchers.IO) {
+        val request = HttpRequest.newBuilder(URI.create(endpoint))
+            .timeout(Duration.ofSeconds(5))
+            .header("content-type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(context.event.toScoreJson(modelId)))
+            .build()
+        val startedAt = System.nanoTime()
+        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        require(response.statusCode() in 200..299) {
+            "demo scoring sidecar returned HTTP ${response.statusCode()}"
         }
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000.0
+        val payload = Json.parseToJsonElement(response.body()).jsonObject
+        XGBoostScoreResponse(
+            rawScore = payload.requiredDouble("raw_score"),
+            shapValues = payload["shap_values"]?.jsonObject.orEmpty().mapValues { (_, value) ->
+                value.jsonPrimitive.doubleOrNull ?: 0.0
+            } + mapOf("sidecar_latency_ms" to elapsedMs),
+        )
+    }
 }
 
-private fun com.fraudcontrols.core.TransactionEvent.toScoreJson(modelId: String): String =
-    buildJsonObject {
-        put("model_id", modelId)
-        put("event_id", eventId.value)
-        put("amount", amount.amount.toDouble())
-        put("sender_account_age_days", senderAccountAgeDays)
-        put("is_new_counterparty", isNewCounterparty)
-    }.toString()
+private fun com.fraudcontrols.core.TransactionEvent.toScoreJson(modelId: String): String = buildJsonObject {
+    put("model_id", modelId)
+    put("event_id", eventId.value)
+    put("amount", amount.amount.toDouble())
+    put("sender_account_age_days", senderAccountAgeDays)
+    put("is_new_counterparty", isNewCounterparty)
+}.toString()
 
-private fun JsonObject.requiredDouble(name: String): Double =
-    this[name]?.jsonPrimitive?.doubleOrNull ?: error("scoring response missing numeric $name")
+private fun JsonObject.requiredDouble(name: String): Double = this[name]?.jsonPrimitive?.doubleOrNull ?: error("scoring response missing numeric $name")
 
 private class FanOutDecisionAuditSink(
     private vararg val sinks: DecisionAuditSink,
@@ -285,14 +282,13 @@ private fun createTopics(
     }
 }
 
-private fun dynamoClient(endpoint: String): DynamoDbClient =
-    DynamoDbClient.builder()
-        .endpointOverride(URI.create(endpoint))
-        .region(Region.US_EAST_1)
-        .credentialsProvider(
-            StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
-        )
-        .build()
+private fun dynamoClient(endpoint: String): DynamoDbClient = DynamoDbClient.builder()
+    .endpointOverride(URI.create(endpoint))
+    .region(Region.US_EAST_1)
+    .credentialsProvider(
+        StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy")),
+    )
+    .build()
 
 private fun ensureAuditTable(
     dynamoClient: DynamoDbClient,

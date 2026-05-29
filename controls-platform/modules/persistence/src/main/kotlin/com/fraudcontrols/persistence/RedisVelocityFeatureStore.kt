@@ -4,10 +4,10 @@ import com.fraudcontrols.core.CustomerId
 import com.fraudcontrols.features.VelocityFeatureStore
 import com.fraudcontrols.features.VelocityMetric
 import com.fraudcontrols.features.VelocityWindow
+import redis.clients.jedis.JedisPooled
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
-import redis.clients.jedis.JedisPooled
 
 class RedisVelocityFeatureStore(
     private val redis: JedisPooled,
@@ -51,6 +51,5 @@ class RedisVelocityFeatureStore(
         redis.zremrangeByScore(senderKey(senderId), Double.NEGATIVE_INFINITY, before.toEpochMilli().toDouble())
     }
 
-    private fun senderKey(senderId: CustomerId): String =
-        "velocity:sender:${senderId.value}:sends"
+    private fun senderKey(senderId: CustomerId): String = "velocity:sender:${senderId.value}:sends"
 }

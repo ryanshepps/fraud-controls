@@ -11,13 +11,13 @@ import com.fraudcontrols.scoring.RuleBasedScorerConfigLoader
 import com.fraudcontrols.scoring.ScorerType
 import com.fraudcontrols.scoring.ScoringConfig
 import com.fraudcontrols.scoring.ScoringConfigLoader
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.Reader
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
-import org.snakeyaml.engine.v2.api.Load
-import org.snakeyaml.engine.v2.api.LoadSettings
 
 internal data class DemoRuntimeConfig(
     val serviceName: String,
@@ -113,10 +113,9 @@ internal class ApplicationConfigLoader(
         )
     }
 
-    private fun defaultApplicationPath(): Path =
-        env("APPLICATION_CONFIG_PATH")?.takeIf { it.isNotBlank() }?.let(Path::of)
-            ?: env("CONFIG_DIR")?.takeIf { it.isNotBlank() }?.let { Path.of(it, "application.yaml") }
-            ?: Path.of("configs", "application.yaml")
+    private fun defaultApplicationPath(): Path = env("APPLICATION_CONFIG_PATH")?.takeIf { it.isNotBlank() }?.let(Path::of)
+        ?: env("CONFIG_DIR")?.takeIf { it.isNotBlank() }?.let { Path.of(it, "application.yaml") }
+        ?: Path.of("configs", "application.yaml")
 }
 
 internal class RuntimeConfigLoader(
@@ -160,22 +159,21 @@ internal class RuntimeConfigLoader(
     private fun loadRuleBasedConfigs(
         scoringConfigDir: Path,
         scoring: ScoringConfig,
-    ): Map<String, RuleBasedScorerConfig> =
-        scoring.scorers
-            .filter { it.type == ScorerType.RULE_BASED }
-            .associate { scorer ->
-                val configPath = scorer.configPath
-                    ?: throw RuntimeConfigException("rule_based scorer ${scorer.name} requires config_path")
-                val path = configPath.resolveFromWorkingDirectoryOr(scoringConfigDir)
-                if (!path.exists()) {
-                    throw RuntimeConfigException("rule_based scorer config not found for ${scorer.name}: $path")
-                }
-                configPath to try {
-                    ruleBasedScorerConfigLoader.load(path)
-                } catch (error: RuntimeException) {
-                    throw RuntimeConfigException("invalid rule_based scorer config $path: ${error.message}", error)
-                }
+    ): Map<String, RuleBasedScorerConfig> = scoring.scorers
+        .filter { it.type == ScorerType.RULE_BASED }
+        .associate { scorer ->
+            val configPath = scorer.configPath
+                ?: throw RuntimeConfigException("rule_based scorer ${scorer.name} requires config_path")
+            val path = configPath.resolveFromWorkingDirectoryOr(scoringConfigDir)
+            if (!path.exists()) {
+                throw RuntimeConfigException("rule_based scorer config not found for ${scorer.name}: $path")
             }
+            configPath to try {
+                ruleBasedScorerConfigLoader.load(path)
+            } catch (error: RuntimeException) {
+                throw RuntimeConfigException("invalid rule_based scorer config $path: ${error.message}", error)
+            }
+        }
 
     private fun loadRules(
         rulesDirectory: Path,
@@ -283,11 +281,10 @@ private fun ScoringConfig.withSidecarOverride(endpoint: String?): ScoringConfig 
     )
 }
 
-private fun knownFraudFeatureNames(): Set<String> =
-    FraudFeatureNames::class.java.fields
-        .filter { it.type == String::class.java }
-        .map { it.get(null) as String }
-        .toSet()
+private fun knownFraudFeatureNames(): Set<String> = FraudFeatureNames::class.java.fields
+    .filter { it.type == String::class.java }
+    .map { it.get(null) as String }
+    .toSet()
 
 private fun String.resolveAgainst(base: Path): Path {
     val path = Path.of(this)
@@ -306,12 +303,11 @@ private fun String.resolveFromWorkingDirectoryOr(base: Path): Path {
     return base.resolve(path).normalize()
 }
 
-private fun String.toUri(name: String): URI =
-    try {
-        URI.create(this)
-    } catch (error: IllegalArgumentException) {
-        throw RuntimeConfigException("$name must be a valid URI: $this", error)
-    }
+private fun String.toUri(name: String): URI = try {
+    URI.create(this)
+} catch (error: IllegalArgumentException) {
+    throw RuntimeConfigException("$name must be a valid URI: $this", error)
+}
 
 private fun String.toPort(name: String): Int {
     val port = toIntOrNull() ?: throw RuntimeConfigException("$name must be an integer port")
@@ -329,23 +325,20 @@ private fun String.toRoutePath(name: String): String {
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun Any?.asMap(path: String): Map<String, Any?> =
-    (this as? Map<*, *>)
-        ?.mapKeys { (key, _) ->
-            key as? String ?: throw RuntimeConfigException("$path keys must be strings")
-        }
-        ?: throw RuntimeConfigException("$path must be an object")
+private fun Any?.asMap(path: String): Map<String, Any?> = (this as? Map<*, *>)
+    ?.mapKeys { (key, _) ->
+        key as? String ?: throw RuntimeConfigException("$path keys must be strings")
+    }
+    ?: throw RuntimeConfigException("$path must be an object")
 
 private fun Map<String, Any?>.map(name: String): Map<String, Any?>? {
     val value = this[name] ?: return null
     return value.asMap(name)
 }
 
-private fun Map<String, Any?>.requiredMap(name: String): Map<String, Any?> =
-    map(name) ?: throw RuntimeConfigException("$name is required")
+private fun Map<String, Any?>.requiredMap(name: String): Map<String, Any?> = map(name) ?: throw RuntimeConfigException("$name is required")
 
-private fun Map<String, Any?>.requiredString(name: String): String =
-    string(name) ?: throw RuntimeConfigException("$name is required")
+private fun Map<String, Any?>.requiredString(name: String): String = string(name) ?: throw RuntimeConfigException("$name is required")
 
 private fun Map<String, Any?>.string(name: String): String? {
     val value = this[name] ?: return null

@@ -319,11 +319,10 @@ class RuleEvaluatorTest {
             "is_new_counterparty" to FeatureValue.BooleanValue(true),
             "transaction_type" to FeatureValue.TextValue("P2P_SEND"),
         ),
-    ): FeatureSnapshot =
-        FeatureSnapshot(
-            eventId = EventId("evt-1"),
-            values = values,
-        )
+    ): FeatureSnapshot = FeatureSnapshot(
+        eventId = EventId("evt-1"),
+        values = values,
+    )
 
     private fun rule(
         id: String = "rule-1",
@@ -341,16 +340,15 @@ class RuleEvaluatorTest {
             ComparisonOperator.EQ,
             RuleValue.BooleanValue(true),
         ),
-    ): RuleDefinition =
-        RuleDefinition(
-            id = id,
-            version = version,
-            enabled = enabled,
-            mode = mode,
-            priority = priority,
-            condition = condition,
-            action = action,
-        )
+    ): RuleDefinition = RuleDefinition(
+        id = id,
+        version = version,
+        enabled = enabled,
+        mode = mode,
+        priority = priority,
+        condition = condition,
+        action = action,
+    )
 }
 
 private fun promptShapeYaml(): String =
