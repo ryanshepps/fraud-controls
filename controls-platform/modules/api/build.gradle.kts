@@ -1,6 +1,7 @@
 import com.google.protobuf.gradle.id
 
 plugins {
+    kotlin("plugin.serialization")
     id("com.google.protobuf")
 }
 
@@ -14,8 +15,11 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded:1.68.1")
     implementation("io.grpc:grpc-protobuf:1.68.1")
     implementation("javax.annotation:javax.annotation-api:1.3.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:3.0.3")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:3.0.3")
     implementation("io.ktor:ktor-server-core-jvm:3.0.3")
     implementation("io.ktor:ktor-server-netty-jvm:3.0.3")
+    implementation("io.ktor:ktor-server-status-pages-jvm:3.0.3")
     implementation("org.apache.kafka:kafka-clients:3.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
