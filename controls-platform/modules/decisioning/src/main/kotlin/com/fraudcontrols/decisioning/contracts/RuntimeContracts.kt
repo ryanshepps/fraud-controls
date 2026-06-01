@@ -6,6 +6,7 @@ import com.fraudcontrols.core.FeatureSnapshot
 import com.fraudcontrols.core.FeatureValue
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.decisioning.DecisionRecord
+import com.fraudcontrols.decisioning.DecisioningResult
 import com.fraudcontrols.rules.ResolvedRuleAction
 import com.fraudcontrols.rules.RuleAction
 import com.fraudcontrols.rules.RuleEvaluationDetail
@@ -19,7 +20,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -28,6 +31,7 @@ object RuntimeContractVersions {
     const val DECISION_EVENT = 1
     const val RULE_EVALUATION_EVENT = 1
     const val DECISION_AUDIT_ROW = 1
+    const val DECISION_SIDE_EFFECT_ENVELOPE = 1
 }
 
 data class DecisionAuditRowContract(
@@ -42,6 +46,14 @@ data class DecisionAuditRowContract(
     val ruleEvaluationIds: List<String>,
     val featuresJson: String,
     val ruleEvaluationJson: String,
+)
+
+data class DecisionSideEffectEnvelopeContract(
+    val schemaVersion: Int,
+    val eventId: String,
+    val decisionJson: String,
+    val ruleEvaluationJson: String,
+    val auditRow: DecisionAuditRowContract,
 )
 
 fun Decision.toDecisionEventJsonString(): String = toDecisionEventJsonObject().toString()
@@ -82,9 +94,45 @@ fun DecisionRecord.toDecisionAuditRowContract(): DecisionAuditRowContract = Deci
     ruleEvaluationJson = ruleEvaluation.toRuleEvaluationEventJsonObject().toString(),
 )
 
+fun DecisioningResult.toDecisionSideEffectEnvelopeJsonString(): String = buildJsonObject {
+    put("schema_version", RuntimeContractVersions.DECISION_SIDE_EFFECT_ENVELOPE)
+    put("event_id", decision.eventId.value)
+    put("decision", decision.toDecisionEventJsonObject())
+    put("rule_evaluation", ruleEvaluation.toRuleEvaluationEventJsonObject())
+    put("audit_row", record.toDecisionAuditRowContract().toJsonObject())
+}.toString()
+
 fun parseDecisionEventContract(payload: String): JsonObject = parseVersionedObject(payload, RuntimeContractVersions.DECISION_EVENT, "decision event")
 
 fun parseRuleEvaluationEventContract(payload: String): JsonObject = parseVersionedObject(payload, RuntimeContractVersions.RULE_EVALUATION_EVENT, "rule evaluation event")
+
+fun parseDecisionSideEffectEnvelopeContract(payload: String): DecisionSideEffectEnvelopeContract {
+    val json = parseVersionedObject(
+        payload = payload,
+        expectedVersion = RuntimeContractVersions.DECISION_SIDE_EFFECT_ENVELOPE,
+        contractName = "decision side effect envelope",
+    )
+    val eventId = json.requiredString("event_id")
+    val decision = json.requiredObject("decision")
+    val ruleEvaluation = json.requiredObject("rule_evaluation")
+    val auditRow = json.requiredObject("audit_row").toDecisionAuditRowContract()
+    require(decision.requiredString("event_id") == eventId) {
+        "decision side effect envelope decision event_id must match envelope event_id"
+    }
+    require(ruleEvaluation.requiredString("event_id") == eventId) {
+        "decision side effect envelope rule_evaluation event_id must match envelope event_id"
+    }
+    require(auditRow.eventId == eventId) {
+        "decision side effect envelope audit_row event_id must match envelope event_id"
+    }
+    return DecisionSideEffectEnvelopeContract(
+        schemaVersion = RuntimeContractVersions.DECISION_SIDE_EFFECT_ENVELOPE,
+        eventId = eventId,
+        decisionJson = decision.toString(),
+        ruleEvaluationJson = ruleEvaluation.toString(),
+        auditRow = auditRow,
+    )
+}
 
 private fun parseVersionedObject(
     payload: String,
@@ -99,6 +147,36 @@ private fun parseVersionedObject(
     }
     return json
 }
+
+fun DecisionAuditRowContract.toJsonObject(): JsonObject = buildJsonObject {
+    put("schema_version", schemaVersion)
+    put("event_id", eventId)
+    put("decided_at", decidedAt)
+    put("action", action)
+    put("reason_codes", reasonCodes.toJsonArray())
+    put("score", score)
+    put("model_version", modelVersion)
+    put("score_json", parseJsonObjectString(scoreJson))
+    put("rule_evaluation_ids", ruleEvaluationIds.toJsonArray())
+    put("features_json", parseJsonObjectString(featuresJson))
+    put("rule_evaluation_json", parseJsonObjectString(ruleEvaluationJson))
+}
+
+private fun JsonObject.toDecisionAuditRowContract(): DecisionAuditRowContract = DecisionAuditRowContract(
+    schemaVersion = requiredInt("schema_version"),
+    eventId = requiredString("event_id"),
+    decidedAt = requiredString("decided_at"),
+    action = requiredString("action"),
+    reasonCodes = requiredStringList("reason_codes"),
+    score = requiredDouble("score"),
+    modelVersion = requiredString("model_version"),
+    scoreJson = requiredObject("score_json").toString(),
+    ruleEvaluationIds = requiredStringList("rule_evaluation_ids"),
+    featuresJson = requiredObject("features_json").toString(),
+    ruleEvaluationJson = requiredObject("rule_evaluation_json").toString(),
+)
+
+private fun parseJsonObjectString(payload: String): JsonObject = Json.parseToJsonElement(payload).jsonObject
 
 private fun ScoreResult.toJsonObject(): JsonObject = buildJsonObject {
     put("score", score)
@@ -190,4 +268,26 @@ private fun RuleAction.toJsonObject(): JsonObject = buildJsonObject {
 
 private fun Iterable<String>.toJsonArray(): JsonArray = buildJsonArray {
     forEach { add(JsonPrimitive(it)) }
+}
+
+private fun JsonObject.requiredObject(name: String): JsonObject = requireNotNull(this[name]) {
+    "missing required object field: $name"
+}.jsonObject
+
+private fun JsonObject.requiredString(name: String): String = requireNotNull(this[name]?.jsonPrimitive?.content) {
+    "missing required string field: $name"
+}
+
+private fun JsonObject.requiredInt(name: String): Int = requireNotNull(this[name]?.jsonPrimitive?.intOrNull) {
+    "missing required integer field: $name"
+}
+
+private fun JsonObject.requiredDouble(name: String): Double = requireNotNull(this[name]?.jsonPrimitive?.double) {
+    "missing required number field: $name"
+}
+
+private fun JsonObject.requiredStringList(name: String): List<String> = requireNotNull(this[name]?.jsonArray) {
+    "missing required string array field: $name"
+}.map { value ->
+    value.jsonPrimitive.content
 }

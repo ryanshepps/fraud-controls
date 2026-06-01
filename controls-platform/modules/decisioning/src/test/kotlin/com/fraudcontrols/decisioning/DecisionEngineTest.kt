@@ -30,6 +30,7 @@ import com.fraudcontrols.scoring.ScorerFeatureProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -278,6 +279,57 @@ class DecisionEngineTest {
     }
 
     @Test
+    fun `processor waits for durable side effect sink before returning`() = runTest {
+        val sideEffectSink = BlockingDecisionSideEffectSink()
+        val metrics = RecordingDecisioningMetrics()
+        val processor = DecisionProcessor(
+            engine = engine(score = sampleScore(0.1)),
+            sideEffectSink = sideEffectSink,
+            metrics = metrics,
+        )
+
+        val deferred = async {
+            processor.process(
+                event = sampleEvent(amount = "1500.00"),
+                rules = listOf(largeAmountRule(action = RuleActionType.BLOCK, reasonCode = "large_amount")),
+                decidedAt = decidedAt,
+            )
+        }
+        runCurrent()
+
+        assertTrue(sideEffectSink.started.isCompleted)
+        assertFalse(deferred.isCompleted)
+        assertEquals(1, metrics.decisions.size)
+
+        sideEffectSink.release.complete(Unit)
+        val result = deferred.await()
+
+        assertEquals(DecisionAction.DENY, result.decision.action)
+        assertEquals(listOf(result), sideEffectSink.results)
+    }
+
+    @Test
+    fun `processor propagates durable side effect sink failures`() = runTest {
+        val metrics = RecordingDecisioningMetrics()
+        val processor = DecisionProcessor(
+            engine = engine(score = sampleScore(0.1)),
+            sideEffectSink = FailingDecisionSideEffectSink(),
+            metrics = metrics,
+        )
+
+        val error = assertFailsWith<IllegalStateException> {
+            processor.process(
+                event = sampleEvent(amount = "1500.00"),
+                rules = listOf(largeAmountRule(action = RuleActionType.BLOCK, reasonCode = "large_amount")),
+                decidedAt = decidedAt,
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("outbox unavailable"))
+        assertEquals(1, metrics.decisions.size)
+    }
+
+    @Test
     fun `requires fraud model score from scorer feature provider`() = runTest {
         val engine = DecisionEngine(featureResolver = FeatureResolver(defaultEventFeatureProviders()))
 
@@ -440,6 +492,24 @@ private class BlockingRuleEvaluationPublisher : RuleEvaluationPublisher {
 private class FailingRuleEvaluationPublisher : RuleEvaluationPublisher {
     override suspend fun publish(evaluation: RuleEvaluationResult) {
         error("rule evaluation publish unavailable")
+    }
+}
+
+private class BlockingDecisionSideEffectSink : DecisionSideEffectSink {
+    val started = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    val results = mutableListOf<DecisioningResult>()
+
+    override suspend fun record(result: DecisioningResult) {
+        started.complete(Unit)
+        release.await()
+        results += result
+    }
+}
+
+private class FailingDecisionSideEffectSink : DecisionSideEffectSink {
+    override suspend fun record(result: DecisioningResult) {
+        error("outbox unavailable")
     }
 }
 

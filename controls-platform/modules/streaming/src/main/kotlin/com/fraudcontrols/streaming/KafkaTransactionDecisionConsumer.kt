@@ -6,6 +6,7 @@ import com.fraudcontrols.rules.RuleDefinition
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import java.time.Clock
 import java.time.Duration
@@ -22,9 +23,14 @@ class KafkaTransactionDecisionConsumer(
     suspend fun pollAndProcess(timeout: Duration): Int {
         val records = consumer.poll(timeout)
         for (record in records) {
-            val event = parser.parse(record.value())
-            beforeProcess(event)
-            processor.process(event = event, rules = rules(), decidedAt = clock.instant())
+            try {
+                val event = parser.parse(record.value())
+                beforeProcess(event)
+                processor.process(event = event, rules = rules(), decidedAt = clock.instant())
+            } catch (error: Exception) {
+                consumer.seek(TopicPartition(record.topic(), record.partition()), record.offset())
+                throw error
+            }
         }
         if (!records.isEmpty) {
             consumer.commitSync()

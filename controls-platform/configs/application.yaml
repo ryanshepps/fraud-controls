@@ -13,6 +13,7 @@ kafka:
   inputTopic: transactions
   decisionsTopic: controls.decisions
   ruleEvaluationsTopic: rule_evaluations
+  decisionSideEffectsTopic: decision_side_effects
   shadowEvaluationsTopic: shadow_evaluations
   ruleChangesTopic: rule_changes
   fraudLabelsTopic: fraud_labels

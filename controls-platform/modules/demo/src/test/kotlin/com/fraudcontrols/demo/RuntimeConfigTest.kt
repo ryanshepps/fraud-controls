@@ -47,6 +47,7 @@ class RuntimeConfigTest {
 
         assertEquals("controls-platform", bundle.application.serviceName)
         assertEquals(19090, bundle.application.httpPort)
+        assertEquals("decision_side_effects", bundle.application.decisionSideEffectsTopic)
         assertEquals(listOf("demo-score-shadow"), bundle.initialRules.map { it.id })
         assertEquals(setOf("heuristic.yaml"), bundle.ruleBasedConfigsByPath.keys)
         val sidecarScorer = bundle.scoring.scorers.single { it.name == "demo_sidecar" }
@@ -168,6 +169,7 @@ class RuntimeConfigTest {
           inputTopic: transactions
           decisionsTopic: controls.decisions
           ruleEvaluationsTopic: rule_evaluations
+          decisionSideEffectsTopic: decision_side_effects
           shadowEvaluationsTopic: shadow_evaluations
           ruleChangesTopic: rule_changes
           fraudLabelsTopic: fraud_labels

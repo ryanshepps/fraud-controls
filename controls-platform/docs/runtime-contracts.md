@@ -210,6 +210,81 @@ Required fields: `schema_version`, `event_id`, `evaluations`. Each evaluation
 requires `scorer_name`, `scorer_version`, `role`, and exactly one of `score` or
 `error`.
 
+## Kafka `decision_side_effects` Payload
+
+Current `schema_version`: `1`
+
+The transaction consumer writes this compact envelope before committing the input
+transaction offset. A separate side-effect consumer expands the envelope into the
+DynamoDB audit row, Kafka `decisions` event, and Kafka `rule_evaluations` event.
+
+```json
+{
+  "schema_version": 1,
+  "event_id": "evt-1",
+  "decision": {
+    "schema_version": 1,
+    "event_id": "evt-1",
+    "action": "HOLD",
+    "reason_codes": ["velocity_spike"],
+    "score": {
+      "score": 0.1,
+      "model_version": "fixed-v1",
+      "latency_ms": 1.0,
+      "degraded": false
+    },
+    "rule_evaluation_ids": ["velocity-spike"],
+    "decided_at": "2026-01-01T12:00:05Z"
+  },
+  "rule_evaluation": {
+    "schema_version": 1,
+    "event_id": "evt-1",
+    "matches": [],
+    "skipped": [],
+    "evaluations": [],
+    "conflict_resolution": {
+      "strategy": "enforce_matches_by_priority_desc_severity_desc_rule_id_asc",
+      "candidates": []
+    }
+  },
+  "audit_row": {
+    "schema_version": 1,
+    "event_id": "evt-1",
+    "decided_at": "2026-01-01T12:00:05Z",
+    "action": "HOLD",
+    "reason_codes": ["velocity_spike"],
+    "score": 0.1,
+    "model_version": "fixed-v1",
+    "score_json": {
+      "score": 0.1,
+      "model_version": "fixed-v1",
+      "latency_ms": 1.0,
+      "degraded": false
+    },
+    "rule_evaluation_ids": ["velocity-spike"],
+    "features_json": {
+      "event_id": "evt-1",
+      "values": {}
+    },
+    "rule_evaluation_json": {
+      "schema_version": 1,
+      "event_id": "evt-1",
+      "matches": [],
+      "skipped": [],
+      "evaluations": [],
+      "conflict_resolution": {
+        "strategy": "enforce_matches_by_priority_desc_severity_desc_rule_id_asc",
+        "candidates": []
+      }
+    }
+  }
+}
+```
+
+Required fields: `schema_version`, `event_id`, `decision`, `rule_evaluation`,
+and `audit_row`. The nested objects use the same versioned shapes documented
+above. All nested `event_id` values must match the envelope `event_id`.
+
 ## DynamoDB Decision Audit Row
 
 Current `schema_version`: `1`

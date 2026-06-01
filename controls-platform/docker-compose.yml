@@ -83,6 +83,7 @@ services:
       TRANSACTIONS_TOPIC: transactions
       DECISIONS_TOPIC: controls.decisions
       RULE_EVALUATIONS_TOPIC: rule_evaluations
+      DECISION_SIDE_EFFECTS_TOPIC: decision_side_effects
       SHADOW_EVALUATIONS_TOPIC: shadow_evaluations
       RULE_CHANGES_TOPIC: rule_changes
       FRAUD_LABELS_TOPIC: fraud_labels

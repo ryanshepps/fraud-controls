@@ -15,6 +15,7 @@ import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.core.TransactionEvent
 import com.fraudcontrols.core.TransactionType
 import com.fraudcontrols.decisioning.DecisionRecord
+import com.fraudcontrols.decisioning.DecisioningResult
 import com.fraudcontrols.features.FraudFeatureNames
 import com.fraudcontrols.rules.ResolvedRuleAction
 import com.fraudcontrols.rules.RuleAction
@@ -155,6 +156,38 @@ class RuntimeContractsTest {
                 ?.content,
         )
     }
+
+    @Test
+    fun `decision side effect envelope carries durable audit and output payloads`() {
+        val payload = sampleResult().toDecisionSideEffectEnvelopeJsonString()
+
+        val envelope = parseDecisionSideEffectEnvelopeContract(payload)
+
+        assertEquals(RuntimeContractVersions.DECISION_SIDE_EFFECT_ENVELOPE, envelope.schemaVersion)
+        assertEquals("evt-1", envelope.eventId)
+        assertEquals("HOLD", Json.parseToJsonElement(envelope.decisionJson).jsonObject["action"]?.jsonPrimitive?.content)
+        assertEquals(
+            "velocity-spike",
+            Json.parseToJsonElement(envelope.ruleEvaluationJson)
+                .jsonObject["matches"]
+                ?.jsonArray
+                ?.single()
+                ?.jsonObject
+                ?.get("rule_id")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals("evt-1", envelope.auditRow.eventId)
+        assertEquals("fixed-v1", envelope.auditRow.modelVersion)
+        assertEquals("number", Json.parseToJsonElement(envelope.auditRow.featuresJson).jsonObject["values"]?.jsonObject?.get(FraudFeatureNames.AMOUNT)?.jsonObject?.get("type")?.jsonPrimitive?.content)
+    }
+
+    private fun sampleResult(): DecisioningResult = DecisioningResult(
+        decision = sampleDecision(),
+        features = sampleRecord().features,
+        ruleEvaluation = sampleRuleEvaluation(),
+        record = sampleRecord(),
+    )
 
     private fun sampleRecord(): DecisionRecord = DecisionRecord(
         decision = sampleDecision(),
