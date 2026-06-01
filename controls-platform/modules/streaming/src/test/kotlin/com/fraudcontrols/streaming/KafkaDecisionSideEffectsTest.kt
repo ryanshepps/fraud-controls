@@ -10,6 +10,8 @@ import com.fraudcontrols.core.ReasonCode
 import com.fraudcontrols.core.ScoreResult
 import com.fraudcontrols.decisioning.DecisionAuditRowSink
 import com.fraudcontrols.decisioning.DecisionRecord
+import com.fraudcontrols.decisioning.DecisionSideEffect
+import com.fraudcontrols.decisioning.DecisioningMetrics
 import com.fraudcontrols.decisioning.DecisioningResult
 import com.fraudcontrols.decisioning.contracts.DecisionAuditRowContract
 import com.fraudcontrols.decisioning.contracts.parseDecisionSideEffectEnvelopeContract
@@ -29,6 +31,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class KafkaDecisionSideEffectsTest {
     @Test
@@ -66,6 +69,27 @@ class KafkaDecisionSideEffectsTest {
         assertEquals(listOf("evt-1"), auditSink.rows.map { it.eventId })
         assertEquals(listOf("evt-1" to envelope.ruleEvaluationJson), ruleEvaluationPublisher.records)
         assertEquals(listOf("evt-1" to envelope.decisionJson), decisionPublisher.records)
+    }
+
+    @Test
+    fun `executor records the failed side effect before retrying the envelope`() = runBlocking {
+        val producer = MockProducer(true, StringSerializer(), StringSerializer())
+        KafkaDecisionSideEffectOutbox(producer, "decision_side_effects").record(sampleResult())
+        val envelope = parseDecisionSideEffectEnvelopeContract(producer.history().single().value())
+        val metrics = RecordingDecisioningMetrics()
+        val executor = DecisionSideEffectExecutor(
+            auditSink = RecordingAuditRowSink(),
+            decisionPublisher = RecordingRawEventPublisher(),
+            ruleEvaluationPublisher = FailingRawEventPublisher(),
+            metrics = metrics,
+        )
+
+        val error = assertFailsWith<IllegalStateException> {
+            executor.execute(envelope)
+        }
+
+        assertEquals("publish unavailable", error.message)
+        assertEquals(listOf(DecisionSideEffect.RULE_EVALUATION_PUBLISH), metrics.sideEffectFailures)
     }
 
     private fun sampleResult(): DecisioningResult {
@@ -146,4 +170,28 @@ private class RecordingRawEventPublisher : RawEventPublisher {
     override suspend fun publish(key: String, payload: String) {
         records += key to payload
     }
+}
+
+private class FailingRawEventPublisher : RawEventPublisher {
+    override suspend fun publish(key: String, payload: String) {
+        error("publish unavailable")
+    }
+}
+
+private class RecordingDecisioningMetrics : DecisioningMetrics {
+    val sideEffectFailures = mutableListOf<DecisionSideEffect>()
+
+    override fun recordDecision(decision: Decision) = Unit
+
+    override fun recordDecisionLatency(latencyMs: Double) = Unit
+
+    override fun recordDecisionSideEffectFailure(sideEffect: DecisionSideEffect) {
+        sideEffectFailures += sideEffect
+    }
+
+    override fun recordFeatureResolutionLatency(latencyMs: Double) = Unit
+
+    override fun recordRuleEvaluationLatency(latencyMs: Double) = Unit
+
+    override fun recordRuleEvaluation(evaluation: RuleEvaluationResult) = Unit
 }

@@ -327,6 +327,7 @@ class DecisionEngineTest {
 
         assertTrue(error.message.orEmpty().contains("outbox unavailable"))
         assertEquals(1, metrics.decisions.size)
+        assertEquals(listOf(DecisionSideEffect.OUTBOX_ENQUEUE), metrics.sideEffectFailures)
     }
 
     @Test

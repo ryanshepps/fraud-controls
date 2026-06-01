@@ -32,6 +32,7 @@ data object NoopDecisioningMetrics : DecisioningMetrics {
 }
 
 enum class DecisionSideEffect {
+    OUTBOX_ENQUEUE,
     AUDIT_RECORD,
     RULE_EVALUATION_PUBLISH,
     DECISION_PUBLISH,

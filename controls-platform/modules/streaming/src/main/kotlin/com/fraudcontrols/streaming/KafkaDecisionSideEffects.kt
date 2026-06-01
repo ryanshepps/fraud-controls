@@ -1,8 +1,11 @@
 package com.fraudcontrols.streaming
 
 import com.fraudcontrols.decisioning.DecisionAuditRowSink
+import com.fraudcontrols.decisioning.DecisionSideEffect
 import com.fraudcontrols.decisioning.DecisionSideEffectSink
+import com.fraudcontrols.decisioning.DecisioningMetrics
 import com.fraudcontrols.decisioning.DecisioningResult
+import com.fraudcontrols.decisioning.NoopDecisioningMetrics
 import com.fraudcontrols.decisioning.contracts.DecisionSideEffectEnvelopeContract
 import com.fraudcontrols.decisioning.contracts.parseDecisionSideEffectEnvelopeContract
 import com.fraudcontrols.decisioning.contracts.toDecisionSideEffectEnvelopeJsonString
@@ -37,11 +40,30 @@ class DecisionSideEffectExecutor(
     private val auditSink: DecisionAuditRowSink,
     private val decisionPublisher: RawEventPublisher,
     private val ruleEvaluationPublisher: RawEventPublisher,
+    private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
 ) {
     suspend fun execute(envelope: DecisionSideEffectEnvelopeContract) {
-        auditSink.record(envelope.auditRow)
-        ruleEvaluationPublisher.publish(envelope.eventId, envelope.ruleEvaluationJson)
-        decisionPublisher.publish(envelope.eventId, envelope.decisionJson)
+        record(DecisionSideEffect.AUDIT_RECORD) {
+            auditSink.record(envelope.auditRow)
+        }
+        record(DecisionSideEffect.RULE_EVALUATION_PUBLISH) {
+            ruleEvaluationPublisher.publish(envelope.eventId, envelope.ruleEvaluationJson)
+        }
+        record(DecisionSideEffect.DECISION_PUBLISH) {
+            decisionPublisher.publish(envelope.eventId, envelope.decisionJson)
+        }
+    }
+
+    private suspend fun record(
+        sideEffect: DecisionSideEffect,
+        operation: suspend () -> Unit,
+    ) {
+        try {
+            operation()
+        } catch (error: Exception) {
+            metrics.recordDecisionSideEffectFailure(sideEffect)
+            throw error
+        }
     }
 }
 

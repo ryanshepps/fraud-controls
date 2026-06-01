@@ -106,7 +106,12 @@ class DecisionProcessor(
         }
         metrics.recordDecision(result.value.decision)
         metrics.recordDecisionLatency(result.elapsedMs)
-        sideEffectSink.record(result.value)
+        try {
+            sideEffectSink.record(result.value)
+        } catch (error: Exception) {
+            metrics.recordDecisionSideEffectFailure(DecisionSideEffect.OUTBOX_ENQUEUE)
+            throw error
+        }
         return result.value
     }
 }

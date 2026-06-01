@@ -172,6 +172,7 @@ fun main() {
                 auditSink = decisionAuditSink,
                 decisionPublisher = KafkaRawEventPublisher(producer, config.decisionsTopic),
                 ruleEvaluationPublisher = KafkaRawEventPublisher(producer, config.ruleEvaluationsTopic),
+                metrics = metricsAdapter,
             ),
         )
 
