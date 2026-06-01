@@ -7,6 +7,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
@@ -14,6 +15,7 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.contentType
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -44,7 +46,7 @@ fun Application.installControlsAdminRoutes(
         }
 
         post("/rules") {
-            val request = call.receive<RuleDefinitionRequest>()
+            val request = call.receiveRequiredJson<RuleDefinitionRequest>()
             val created =
                 ruleAdminService.create(
                     rule = request.toRuleDefinition(),
@@ -55,7 +57,7 @@ fun Application.installControlsAdminRoutes(
 
         put("/rules/{id}") {
             val ruleId = parseRequiredPathParameter("id", call.parameters["id"].orEmpty())
-            val request = call.receive<RuleDefinitionRequest>()
+            val request = call.receiveRequiredJson<RuleDefinitionRequest>()
             val updated =
                 ruleAdminService.update(
                     ruleId = ruleId,
@@ -108,7 +110,15 @@ fun Application.installControlsAdminRoutes(
 
 internal fun parseDecisionLookupEventId(rawEventId: String): String = parseRequiredPathParameter("event_id", rawEventId)
 
-private suspend inline fun <reified T> io.ktor.server.application.ApplicationCall.receiveOptionalJsonBody(defaultValue: T): T {
+private suspend inline fun <reified T : Any> ApplicationCall.receiveRequiredJson(): T {
+    val requestContentType = request.contentType()
+    if (requestContentType == ContentType.Any || !requestContentType.match(ContentType.Application.Json)) {
+        throw ApiUnsupportedMediaTypeException("content type must be application/json")
+    }
+    return receive()
+}
+
+private suspend inline fun <reified T> ApplicationCall.receiveOptionalJsonBody(defaultValue: T): T {
     val payload = receiveText()
     if (payload.isBlank()) {
         return defaultValue
@@ -156,6 +166,9 @@ private fun Application.installControlsAdminApiPlugins() {
         exception<ApiJsonException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message.orEmpty()))
         }
+        exception<ApiUnsupportedMediaTypeException> { call, cause ->
+            call.respond(HttpStatusCode.UnsupportedMediaType, ApiErrorResponse(cause.message.orEmpty()))
+        }
         exception<BadRequestException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ApiErrorResponse(cause.message ?: "invalid request body"))
         }
@@ -173,3 +186,7 @@ private fun Application.installControlsAdminApiPlugins() {
         }
     }
 }
+
+private class ApiUnsupportedMediaTypeException(
+    message: String,
+) : IllegalArgumentException(message)

@@ -170,6 +170,16 @@ class AdminHttpApiTest {
                 contentType(ContentType.Application.Json)
                 setBody(ruleJson(id = "duplicate-score", mode = "shadow", actor = "risk-admin"))
             }
+        val createdEnforce =
+            client.post("/rules") {
+                contentType(ContentType.Application.Json)
+                setBody(ruleJson(id = "enforce-score", mode = "enforce", actor = "risk-admin"))
+            }
+        val promoteEnforce =
+            client.post("/rules/enforce-score/promote") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"actor":"risk-admin","confirm":true}""")
+            }
 
         assertEquals(HttpStatusCode.BadRequest, malformed.status)
         assertTrue(malformed.bodyAsText().contains(""""error":"""))
@@ -177,6 +187,28 @@ class AdminHttpApiTest {
         assertEquals(HttpStatusCode.Created, created.status)
         assertEquals(HttpStatusCode.Conflict, duplicate.status)
         assertTrue(duplicate.bodyAsText().contains(""""error":"rule already exists: duplicate-score""""))
+        assertEquals(HttpStatusCode.Created, createdEnforce.status)
+        assertEquals(HttpStatusCode.BadRequest, promoteEnforce.status)
+        assertTrue(promoteEnforce.bodyAsText().contains(""""error":"only shadow rules can be promoted""""))
+    }
+
+    @Test
+    fun `required rule bodies return JSON unsupported media errors`() = testApplication {
+        application {
+            installControlsAdminRoutes(
+                ruleAdminService = RuleAdminService(),
+                decisionRecords = InMemoryDecisionRecordStore(),
+            )
+        }
+
+        val response =
+            client.post("/rules") {
+                setBody(ruleJson(id = "missing-content-type", mode = "shadow", actor = "risk-admin"))
+            }
+
+        assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+        assertTrue(response.bodyAsText().contains(""""error":"content type must be application/json""""))
+        assertTrue(response.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
     }
 
     @Test
