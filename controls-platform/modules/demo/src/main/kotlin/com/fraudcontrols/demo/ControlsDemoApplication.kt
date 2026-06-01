@@ -33,6 +33,7 @@ import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
 import com.fraudcontrols.streaming.kafkaDecisionSideEffectConsumer
 import com.fraudcontrols.streaming.kafkaStringConsumer
 import com.fraudcontrols.streaming.kafkaStringProducer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -191,7 +192,9 @@ fun main() {
                     if (processed > 0) {
                         println("processed $processed transaction(s)")
                     }
-                } catch (error: RuntimeException) {
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
                     println("transaction processing failed; will retry: ${error.message}")
                     delay(1_000)
                 }
@@ -201,7 +204,9 @@ fun main() {
             while (isActive) {
                 try {
                     sideEffectConsumer.pollAndExecute(Duration.ofMillis(500))
-                } catch (error: RuntimeException) {
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
                     println("decision side effect execution failed; will retry: ${error.message}")
                     delay(1_000)
                 }
