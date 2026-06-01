@@ -201,14 +201,21 @@ class AdminHttpApiTest {
             )
         }
 
-        val response =
+        val create =
             client.post("/rules") {
                 setBody(ruleJson(id = "missing-content-type", mode = "shadow", actor = "risk-admin"))
             }
+        val update =
+            client.put("/rules/missing-content-type") {
+                setBody(ruleJson(id = "missing-content-type", mode = "shadow", actor = "risk-admin"))
+            }
 
-        assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
-        assertTrue(response.bodyAsText().contains(""""error":"content type must be application/json""""))
-        assertTrue(response.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
+        assertEquals(HttpStatusCode.UnsupportedMediaType, create.status)
+        assertTrue(create.bodyAsText().contains(""""error":"content type must be application/json""""))
+        assertTrue(create.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
+        assertEquals(HttpStatusCode.UnsupportedMediaType, update.status)
+        assertTrue(update.bodyAsText().contains(""""error":"content type must be application/json""""))
+        assertTrue(update.headers[HttpHeaders.ContentType].orEmpty().contains(ContentType.Application.Json.contentType))
     }
 
     @Test
