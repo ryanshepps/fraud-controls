@@ -4,6 +4,7 @@ import com.fraudcontrols.rules.ComparisonOperator
 import com.fraudcontrols.rules.RuleCondition
 import com.fraudcontrols.rules.RuleMode
 import com.fraudcontrols.rules.RuleValue
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -14,6 +15,12 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.put
+
+internal val apiJson = Json {
+    encodeDefaults = true
+    explicitNulls = false
+    ignoreUnknownKeys = true
+}
 
 internal fun parseConditionJson(raw: JsonObject): RuleCondition = when {
     "all" in raw -> RuleCondition.All(raw.requiredArray("all").map { parseConditionJson(it.requiredObject("all condition")) })
