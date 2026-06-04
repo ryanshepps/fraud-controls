@@ -25,11 +25,15 @@ import com.fraudcontrols.scoring.ScorerFactory
 import com.fraudcontrols.scoring.ScorerFeatureProvider
 import com.fraudcontrols.scoring.XGBoostScoreClient
 import com.fraudcontrols.scoring.XGBoostScoreResponse
-import com.fraudcontrols.streaming.KafkaDecisionPublisher
-import com.fraudcontrols.streaming.KafkaRuleEvaluationPublisher
+import com.fraudcontrols.streaming.DecisionSideEffectExecutor
+import com.fraudcontrols.streaming.KafkaDecisionSideEffectConsumer
+import com.fraudcontrols.streaming.KafkaDecisionSideEffectOutbox
+import com.fraudcontrols.streaming.KafkaRawEventPublisher
 import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
+import com.fraudcontrols.streaming.kafkaDecisionSideEffectConsumer
 import com.fraudcontrols.streaming.kafkaStringConsumer
 import com.fraudcontrols.streaming.kafkaStringProducer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -79,6 +83,7 @@ fun main() {
                     config.transactionsTopic,
                     config.decisionsTopic,
                     config.ruleEvaluationsTopic,
+                    config.decisionSideEffectsTopic,
                     config.shadowEvaluationsTopic,
                     config.ruleChangesTopic,
                     config.fraudLabelsTopic,
@@ -94,6 +99,7 @@ fun main() {
         val controlsMetrics = MicrometerControlsMetrics()
         val metricsAdapter = DecisioningMetricsAdapter(controlsMetrics)
         val decisionAuditReader = DynamoDecisionAuditReader(dynamoClient, config.auditTable)
+        val decisionAuditSink = DynamoDecisionAuditSink(dynamoClient, config.auditTable)
         val ruleAdminService = RuleAdminService(
             initialRules = runtime.initialRules,
             auditPublisher = KafkaRuleChangeAuditPublisher(producer, config.ruleChangesTopic),
@@ -123,11 +129,10 @@ fun main() {
                 featureResolver = FeatureResolver(baseFeatureProviders + scoringFeatureProviders),
                 metrics = metricsAdapter,
             ),
-            auditSink = FanOutDecisionAuditSink(
-                DynamoDecisionAuditSink(dynamoClient, config.auditTable),
+            sideEffectSink = KafkaDecisionSideEffectOutbox(
+                producer = producer,
+                topic = config.decisionSideEffectsTopic,
             ),
-            decisionPublisher = KafkaDecisionPublisher(producer, config.decisionsTopic),
-            ruleEvaluationPublisher = KafkaRuleEvaluationPublisher(producer, config.ruleEvaluationsTopic),
             metrics = metricsAdapter,
         )
         val transactionConsumer = KafkaTransactionDecisionConsumer(
@@ -157,6 +162,19 @@ fun main() {
             shadowEvaluationsTopic = config.shadowEvaluationsTopic,
             ruleEvaluationsTopic = config.ruleEvaluationsTopic,
         )
+        val sideEffectConsumer = KafkaDecisionSideEffectConsumer(
+            consumer = kafkaDecisionSideEffectConsumer(
+                bootstrapServers = config.kafkaBootstrapServers,
+                groupId = "controls-demo-side-effects",
+                topics = listOf(config.decisionSideEffectsTopic),
+            ),
+            executor = DecisionSideEffectExecutor(
+                auditSink = decisionAuditSink,
+                decisionPublisher = KafkaRawEventPublisher(producer, config.decisionsTopic),
+                ruleEvaluationPublisher = KafkaRawEventPublisher(producer, config.ruleEvaluationsTopic),
+                metrics = metricsAdapter,
+            ),
+        )
 
         startAdminHttpServer(
             ruleAdminService = ruleAdminService,
@@ -170,9 +188,28 @@ fun main() {
 
         launch(Dispatchers.IO) {
             while (isActive) {
-                val processed = transactionConsumer.pollAndProcess(Duration.ofMillis(500))
-                if (processed > 0) {
-                    println("processed $processed transaction(s)")
+                try {
+                    val processed = transactionConsumer.pollAndProcess(Duration.ofMillis(500))
+                    if (processed > 0) {
+                        println("processed $processed transaction(s)")
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    println("transaction processing failed; will retry: ${error.message}")
+                    delay(1_000)
+                }
+            }
+        }
+        launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    sideEffectConsumer.pollAndExecute(Duration.ofMillis(500))
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    println("decision side effect execution failed; will retry: ${error.message}")
+                    delay(1_000)
                 }
             }
         }
@@ -184,6 +221,7 @@ fun main() {
         Runtime.getRuntime().addShutdownHook(
             Thread {
                 transactionConsumer.close()
+                sideEffectConsumer.close()
                 reporterConsumer.close()
                 producer.close()
                 redisClient.close()
@@ -235,16 +273,6 @@ private fun com.fraudcontrols.core.TransactionEvent.toScoreJson(modelId: String)
 }.toString()
 
 private fun JsonObject.requiredDouble(name: String): Double = this[name]?.jsonPrimitive?.doubleOrNull ?: error("scoring response missing numeric $name")
-
-private class FanOutDecisionAuditSink(
-    private vararg val sinks: DecisionAuditSink,
-) : DecisionAuditSink {
-    override suspend fun record(record: DecisionRecord) {
-        for (sink in sinks) {
-            sink.record(record)
-        }
-    }
-}
 
 private suspend fun retry(
     description: String,

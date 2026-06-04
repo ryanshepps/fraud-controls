@@ -21,9 +21,12 @@ import com.fraudcontrols.rules.RuleDefinition
 import com.fraudcontrols.rules.RuleValue
 import com.fraudcontrols.scoring.Scorer
 import com.fraudcontrols.scoring.ScorerFeatureProvider
-import com.fraudcontrols.streaming.KafkaDecisionPublisher
-import com.fraudcontrols.streaming.KafkaRuleEvaluationPublisher
+import com.fraudcontrols.streaming.DecisionSideEffectExecutor
+import com.fraudcontrols.streaming.KafkaDecisionSideEffectConsumer
+import com.fraudcontrols.streaming.KafkaDecisionSideEffectOutbox
+import com.fraudcontrols.streaming.KafkaRawEventPublisher
 import com.fraudcontrols.streaming.KafkaTransactionDecisionConsumer
+import com.fraudcontrols.streaming.kafkaDecisionSideEffectConsumer
 import com.fraudcontrols.streaming.kafkaStringConsumer
 import com.fraudcontrols.streaming.kafkaStringProducer
 import kotlinx.coroutines.runBlocking
@@ -75,6 +78,7 @@ class RuntimePipelineIntegrationTest {
             .waitingFor(Wait.forListeningPort())
         var producer: KafkaProducer<String, String>? = null
         var transactionConsumer: KafkaTransactionDecisionConsumer? = null
+        var sideEffectConsumer: KafkaDecisionSideEffectConsumer? = null
         var redisClient: JedisPooled? = null
         var dynamoClient: DynamoDbClient? = null
 
@@ -86,9 +90,10 @@ class RuntimePipelineIntegrationTest {
             val transactionsTopic = "transactions-$suffix"
             val decisionsTopic = "decisions-$suffix"
             val ruleEvaluationsTopic = "rule-evaluations-$suffix"
+            val decisionSideEffectsTopic = "decision-side-effects-$suffix"
             val auditTable = "decision_audit_$suffix".replace("-", "_")
 
-            createTopics(redpanda.bootstrapServers, transactionsTopic, decisionsTopic, ruleEvaluationsTopic)
+            createTopics(redpanda.bootstrapServers, transactionsTopic, decisionsTopic, ruleEvaluationsTopic, decisionSideEffectsTopic)
             val createdDynamoClient = dynamoClient(dynamodb)
             dynamoClient = createdDynamoClient
             createAuditTable(createdDynamoClient, auditTable)
@@ -107,6 +112,7 @@ class RuntimePipelineIntegrationTest {
 
             val createdProducer = kafkaStringProducer(redpanda.bootstrapServers)
             producer = createdProducer
+            val auditSink = DynamoDecisionAuditSink(createdDynamoClient, auditTable)
             val processor = DecisionProcessor(
                 engine = DecisionEngine(
                     FeatureResolver(
@@ -115,9 +121,7 @@ class RuntimePipelineIntegrationTest {
                             ScorerFeatureProvider(FixedScorer(score = 0.1)),
                     ),
                 ),
-                auditSink = DynamoDecisionAuditSink(createdDynamoClient, auditTable),
-                decisionPublisher = KafkaDecisionPublisher(createdProducer, decisionsTopic),
-                ruleEvaluationPublisher = KafkaRuleEvaluationPublisher(createdProducer, ruleEvaluationsTopic),
+                sideEffectSink = KafkaDecisionSideEffectOutbox(createdProducer, decisionSideEffectsTopic),
             )
             transactionConsumer = KafkaTransactionDecisionConsumer(
                 consumer = kafkaStringConsumer(
@@ -129,12 +133,27 @@ class RuntimePipelineIntegrationTest {
                 rules = { listOf(velocityRule()) },
                 clock = Clock.fixed(Instant.parse("2026-01-01T12:00:05Z"), ZoneOffset.UTC),
             )
+            sideEffectConsumer = KafkaDecisionSideEffectConsumer(
+                consumer = kafkaDecisionSideEffectConsumer(
+                    bootstrapServers = redpanda.bootstrapServers,
+                    groupId = "decision-side-effects-$suffix",
+                    topics = listOf(decisionSideEffectsTopic),
+                ),
+                executor = DecisionSideEffectExecutor(
+                    auditSink = auditSink,
+                    decisionPublisher = KafkaRawEventPublisher(createdProducer, decisionsTopic),
+                    ruleEvaluationPublisher = KafkaRawEventPublisher(createdProducer, ruleEvaluationsTopic),
+                ),
+            )
 
             createdProducer.send(ProducerRecord(transactionsTopic, "evt-1", fraudgenPayload())).get()
             createdProducer.flush()
 
             eventually("transaction consumed") {
                 true.takeIf { transactionConsumer.pollAndProcess(Duration.ofMillis(250)) == 1 }
+            }
+            eventually("decision side effects executed") {
+                true.takeIf { sideEffectConsumer.pollAndExecute(Duration.ofMillis(250)) == 1 }
             }
 
             val auditItem = eventually("audit item persisted") {
@@ -169,6 +188,7 @@ class RuntimePipelineIntegrationTest {
             assertEquals("MATCHED", ruleEvaluationJson["evaluations"]?.jsonArray?.single()?.jsonObject?.get("condition_result")?.jsonPrimitive?.content)
         } finally {
             transactionConsumer?.close()
+            sideEffectConsumer?.close()
             producer?.close()
             redisClient?.close()
             dynamoClient?.close()

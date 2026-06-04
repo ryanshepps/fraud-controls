@@ -29,6 +29,7 @@ internal data class DemoRuntimeConfig(
     val transactionsTopic: String,
     val decisionsTopic: String,
     val ruleEvaluationsTopic: String,
+    val decisionSideEffectsTopic: String,
     val shadowEvaluationsTopic: String,
     val ruleChangesTopic: String,
     val fraudLabelsTopic: String,
@@ -99,6 +100,9 @@ internal class ApplicationConfigLoader(
             transactionsTopic = env("TRANSACTIONS_TOPIC") ?: kafka.requiredString("inputTopic"),
             decisionsTopic = env("DECISIONS_TOPIC") ?: kafka.requiredString("decisionsTopic"),
             ruleEvaluationsTopic = env("RULE_EVALUATIONS_TOPIC") ?: kafka.requiredString("ruleEvaluationsTopic"),
+            decisionSideEffectsTopic = env("DECISION_SIDE_EFFECTS_TOPIC")
+                ?: kafka.string("decisionSideEffectsTopic")
+                ?: "decision_side_effects",
             shadowEvaluationsTopic = env("SHADOW_EVALUATIONS_TOPIC") ?: kafka.requiredString("shadowEvaluationsTopic"),
             ruleChangesTopic = env("RULE_CHANGES_TOPIC") ?: kafka.requiredString("ruleChangesTopic"),
             fraudLabelsTopic = env("FRAUD_LABELS_TOPIC") ?: kafka.requiredString("fraudLabelsTopic"),

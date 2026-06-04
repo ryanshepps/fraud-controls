@@ -1,6 +1,7 @@
 package com.fraudcontrols.persistence
 
 import com.fraudcontrols.core.EventId
+import com.fraudcontrols.decisioning.DecisionAuditRowSink
 import com.fraudcontrols.decisioning.DecisionAuditSink
 import com.fraudcontrols.decisioning.DecisionRecord
 import com.fraudcontrols.decisioning.DecisionRecordReader
@@ -14,12 +15,17 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 class DynamoDecisionAuditSink(
     private val dynamoDb: DynamoDbClient,
     private val tableName: String,
-) : DecisionAuditSink {
+) : DecisionAuditSink,
+    DecisionAuditRowSink {
     override suspend fun record(record: DecisionRecord) {
+        record(record.toDecisionAuditRowContract())
+    }
+
+    override suspend fun record(row: DecisionAuditRowContract) {
         dynamoDb.putItem(
             PutItemRequest.builder()
                 .tableName(tableName)
-                .item(record.toItem())
+                .item(row.toItem())
                 .build(),
         )
     }
@@ -44,8 +50,6 @@ class DynamoDecisionAuditReader(
         return item.toDecisionAuditRowContract()
     }
 }
-
-private fun DecisionRecord.toItem(): Map<String, AttributeValue> = toDecisionAuditRowContract().toItem()
 
 private fun DecisionAuditRowContract.toItem(): Map<String, AttributeValue> = mapOf(
     "event_id" to s(eventId),

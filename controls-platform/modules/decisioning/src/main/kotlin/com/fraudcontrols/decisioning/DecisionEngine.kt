@@ -78,13 +78,24 @@ class DecisionEngine(
 
 class DecisionProcessor(
     private val engine: DecisionEngine,
-    private val auditSink: DecisionAuditSink = NoopDecisionAuditSink,
-    private val decisionPublisher: DecisionPublisher = NoopDecisionPublisher,
-    private val ruleEvaluationPublisher: RuleEvaluationPublisher = NoopRuleEvaluationPublisher,
+    auditSink: DecisionAuditSink = NoopDecisionAuditSink,
+    decisionPublisher: DecisionPublisher = NoopDecisionPublisher,
+    ruleEvaluationPublisher: RuleEvaluationPublisher = NoopRuleEvaluationPublisher,
     private val metrics: DecisioningMetrics = NoopDecisioningMetrics,
-    private val sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    sideEffectSink: DecisionSideEffectSink? = null,
     private val logger: Logger = Logger.getLogger(DecisionProcessor::class.java.name),
 ) {
+    private val sideEffectSink: DecisionSideEffectSink = sideEffectSink
+        ?: AsyncDecisionSideEffectSink(
+            auditSink = auditSink,
+            decisionPublisher = decisionPublisher,
+            ruleEvaluationPublisher = ruleEvaluationPublisher,
+            metrics = metrics,
+            sideEffectScope = sideEffectScope,
+            logger = logger,
+        )
+
     suspend fun process(
         event: TransactionEvent,
         rules: List<RuleDefinition>,
@@ -95,11 +106,25 @@ class DecisionProcessor(
         }
         metrics.recordDecision(result.value.decision)
         metrics.recordDecisionLatency(result.elapsedMs)
-        scheduleSideEffects(result.value)
+        try {
+            sideEffectSink.record(result.value)
+        } catch (error: Exception) {
+            metrics.recordDecisionSideEffectFailure(DecisionSideEffect.OUTBOX_ENQUEUE)
+            throw error
+        }
         return result.value
     }
+}
 
-    private fun scheduleSideEffects(result: DecisioningResult) {
+private class AsyncDecisionSideEffectSink(
+    private val auditSink: DecisionAuditSink,
+    private val decisionPublisher: DecisionPublisher,
+    private val ruleEvaluationPublisher: RuleEvaluationPublisher,
+    private val metrics: DecisioningMetrics,
+    private val sideEffectScope: CoroutineScope,
+    private val logger: Logger,
+) : DecisionSideEffectSink {
+    override suspend fun record(result: DecisioningResult) {
         launchSideEffect(DecisionSideEffect.AUDIT_RECORD) {
             auditSink.record(result.record)
         }
@@ -132,6 +157,10 @@ interface DecisionAuditSink {
     suspend fun record(record: DecisionRecord)
 }
 
+interface DecisionAuditRowSink {
+    suspend fun record(row: DecisionAuditRowContract)
+}
+
 interface DecisionRecordReader {
     suspend fun find(eventId: EventId): DecisionAuditRowContract?
 }
@@ -142,6 +171,10 @@ interface DecisionPublisher {
 
 interface RuleEvaluationPublisher {
     suspend fun publish(evaluation: RuleEvaluationResult)
+}
+
+interface DecisionSideEffectSink {
+    suspend fun record(result: DecisioningResult)
 }
 
 data class DecisioningResult(
@@ -160,6 +193,10 @@ data class DecisionRecord(
 
 object NoopDecisionAuditSink : DecisionAuditSink {
     override suspend fun record(record: DecisionRecord) = Unit
+}
+
+object NoopDecisionSideEffectSink : DecisionSideEffectSink {
+    override suspend fun record(result: DecisioningResult) = Unit
 }
 
 object NoopDecisionPublisher : DecisionPublisher {
